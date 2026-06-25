@@ -1,0 +1,3 @@
+# A.P.E.X. backend has ZERO third-party Python dependencies — everything uses the
+# standard library (http.server, urllib, json, etc.). This file exists so hosts like
+# Render auto-detect this as a Python project; it intentionally installs nothing.

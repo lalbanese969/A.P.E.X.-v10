@@ -25,6 +25,8 @@ framework if we decide we need one — the pipeline logic lives in pipeline.py, 
 
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import os
 import sys
@@ -47,12 +49,49 @@ from backend import settings as settings_mod  # noqa: E402
 PORT = int(os.environ.get("PORT", 8765))
 HOST = os.environ.get("APEX_HOST", "0.0.0.0")  # 0.0.0.0 = reachable on your LAN (and cloud hosts)
 
+# --- Access password ---------------------------------------------------------
+# If APEX_ACCESS_PASSWORD is set (e.g. on a public host like Render), every request
+# requires that password via HTTP Basic Auth (browser shows its native login prompt).
+# If it's NOT set (the normal local/LAN case), no password is required — unchanged
+# behavior. This protects ALL routes, including static files (e.g. memory JSON).
+ACCESS_PASSWORD = os.environ.get("APEX_ACCESS_PASSWORD", "")
+
 
 class ApexHandler(SimpleHTTPRequestHandler):
     """Serves static files (inherited) + the /api/* routes."""
 
+    # ----- access control ----------------------------------------------------
+    def _authorized(self) -> bool:
+        """True if no password is configured, or the request supplies the right one."""
+        if not ACCESS_PASSWORD:
+            return True
+        header = self.headers.get("Authorization", "")
+        if not header.startswith("Basic "):
+            return False
+        try:
+            decoded = base64.b64decode(header[6:]).decode("utf-8")
+            _, _, supplied = decoded.partition(":")
+        except Exception:
+            return False
+        return hmac.compare_digest(supplied, ACCESS_PASSWORD)
+
+    def _require_auth(self) -> bool:
+        """If unauthorized, send the 401 challenge and return False."""
+        if self._authorized():
+            return True
+        body = b"Access password required."
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="A.P.E.X."')
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     # ----- routing ----------------------------------------------------------
     def do_GET(self):
+        if not self._require_auth():
+            return
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
         if path.startswith("/api"):
@@ -61,6 +100,8 @@ class ApexHandler(SimpleHTTPRequestHandler):
             super().do_GET()  # static files (index.html, etc.)
 
     def do_POST(self):
+        if not self._require_auth():
+            return
         path = urlparse(self.path).path.rstrip("/")
         if path == "/api/chat":
             self._handle_chat()

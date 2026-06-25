@@ -1,0 +1,23 @@
+# Render deployment config — https://render.com/docs/blueprint-spec
+#
+# This tells Render how to run A.P.E.X.'s backend. Render auto-detects this file
+# when you create a new "Blueprint" service pointed at this GitHub repo.
+#
+# Render sets $PORT itself — backend/server.py already reads it (see PORT = os.environ.get("PORT", ...)).
+# The env vars below are marked `sync: false`, meaning Render will prompt you to type the
+# real values into its dashboard — they are NEVER stored in this file or in git.
+
+services:
+  - type: web
+    name: apex-v10
+    runtime: python
+    plan: free
+    buildCommand: "echo 'no build step needed — stdlib only'"
+    startCommand: "python -m backend.server"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: APEX_ACCESS_PASSWORD
+        sync: false
