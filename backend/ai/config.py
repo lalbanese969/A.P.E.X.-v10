@@ -36,7 +36,9 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     },
     "fallback_provider": "ollama",
     "gemini_model": "gemini-2.0-flash",
-    "ollama_host": "http://localhost:11434",
+    # NOTE: use 127.0.0.1, not "localhost" — Python's urllib resolves "localhost" to ~2s on
+    # some Windows machines (vs ~40ms for 127.0.0.1), which made the Settings page slow.
+    "ollama_host": "http://127.0.0.1:11434",
     "ollama_auth_header": None,
     "ollama_tiers": {"small": "llama3.2:3b", "medium": "llama3.1:8b", "large": "qwen2.5:14b"},
     "default_internal_tier": "small",

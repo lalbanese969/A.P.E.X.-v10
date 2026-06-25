@@ -17,7 +17,7 @@
   "fallback_provider": "ollama",
   "_fallback_note": "If the chosen provider is down/unconfigured, fall back to this one (local Ollama).",
   "gemini_model": "gemini-2.0-flash",
-  "ollama_host": "http://localhost:11434",
+  "ollama_host": "http://127.0.0.1:11434",
   "ollama_auth_header": null,
   "_ollama_cloud_note": "For a remote/cloud Ollama, change ollama_host and set ollama_auth_header to 'Bearer TOKEN'.",
   "ollama_tiers": {
