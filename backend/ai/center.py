@@ -1,20 +1,21 @@
 """
-center.py — the AI Center: route each task to the right brain and log usage.
+center.py — the AI Center: route each task to a provider and log usage.
 
-Routing rules (per the project's cost philosophy):
-  - task_type "user_answer"  -> Gemini (PAID), used sparingly. A per-TURN budget guard
-    caps Gemini calls (default 1, hard cap from config). Over budget / no key / offline
-    -> fall back to a capable local Ollama model.
-  - every other task_type     -> Ollama (FREE/local) at the requested complexity tier.
+Provider-based routing (configured in config/ai_center.json):
+  - task "user_answer"  -> user_answer.provider/model        (default: Groq)
+  - any other task      -> internal.provider + tier model    (default: Groq small)
+  - if the chosen provider is unavailable or errors          -> fallback_provider (default: Ollama)
+  - if nothing is reachable                                  -> ProviderError (pipeline shows a memory-only message)
+
+Providers: groq (fast/free cloud), gemini (cloud), ollama (local). All speak HTTP via stdlib.
 
 Usage:
     center = AICenter()
-    sess = center.session()                 # one session per UI turn (tracks Gemini budget)
-    answer = sess.run_task("user_answer", messages)        # Gemini (budgeted)
-    label  = sess.run_task("classify", messages, "small")  # Ollama small
+    sess = center.session()
+    ans  = sess.run_task("user_answer", messages)
+    tag  = sess.run_task("classify", messages, "small")
 
-Each call returns a ProviderResult (.text, .provider, .model, .usage). Failures raise
-ProviderError so callers can degrade gracefully.
+Every call is logged to core_memory/logs/ai_usage_log.jsonl.
 """
 
 from __future__ import annotations
@@ -26,27 +27,23 @@ from datetime import datetime
 from . import config, models
 from .providers.base import ProviderError, ProviderResult
 from .providers.gemini import GeminiProvider
+from .providers.groq import GroqProvider
 from .providers.ollama import OllamaProvider
 
-# reuse the memory module's logs directory
 from ..memory import paths
 
 USAGE_LOG_FILE = paths.LOGS_DIR / "ai_usage_log.jsonl"
 
-# tier used when Gemini is unavailable and we must answer the user locally
-_USER_FALLBACK_TIER = "medium"
-
 
 class AISession:
-    """Tracks per-turn state (notably the Gemini call budget)."""
+    """Per-turn handle (kept for API symmetry; routing state lives on the center)."""
 
     def __init__(self, center: "AICenter"):
         self.center = center
-        self.gemini_calls = 0
 
     def run_task(self, task_type: str, messages: list[dict[str, str]],
                  complexity: str = "small", **opts) -> ProviderResult:
-        return self.center._run(task_type, messages, complexity, self, **opts)
+        return self.center._run(task_type, messages, complexity, **opts)
 
 
 class AICenter:
@@ -54,61 +51,70 @@ class AICenter:
         host, auth = config.ollama_settings()
         self.ollama = OllamaProvider(host=host, auth_header=auth)
         self.gemini = GeminiProvider(api_key=config.gemini_api_key())
-        self._ollama_models_cache: list[str] | None = None  # lazily fetched
-
-    def _pick_ollama_model(self, requested: str) -> str:
-        """
-        Return a model that's actually pulled in Ollama. If the requested tier model
-        isn't installed (common — e.g. only one model pulled), fall back to an
-        installed one (preferring a same-family match) so tasks don't 404.
-        """
-        if self._ollama_models_cache is None:
-            self._ollama_models_cache = self.ollama.available_models()
-        installed = self._ollama_models_cache
-        if not installed:          # couldn't list (offline) — try as-is
-            return requested
-        if requested in installed:
-            return requested
-        base = requested.split(":")[0]
-        same_family = [m for m in installed if m.split(":")[0] == base]
-        return (same_family or installed)[0]
+        self.groq = GroqProvider(api_key=config.groq_api_key())
+        self.providers = {"ollama": self.ollama, "gemini": self.gemini, "groq": self.groq}
+        self._ollama_models_cache: list[str] | None = None
 
     def session(self) -> AISession:
         return AISession(self)
 
-    # convenience for one-off internal tasks (no shared budget)
-    def run_task(self, task_type: str, messages: list[dict[str, str]],
-                 complexity: str = "small", **opts) -> ProviderResult:
-        return self._run(task_type, messages, complexity, self.session(), **opts)
+    def run_task(self, task_type: str, messages, complexity: str = "small", **opts) -> ProviderResult:
+        return self._run(task_type, messages, complexity, **opts)
 
-    # ----- internal routing -------------------------------------------------
-    def _run(self, task_type, messages, complexity, session, **opts) -> ProviderResult:
+    # ----- routing ----------------------------------------------------------
+    def _run(self, task_type, messages, complexity, **opts) -> ProviderResult:
         if task_type == "user_answer":
-            return self._user_answer(messages, session, **opts)
-        return self._internal(task_type, messages, complexity, **opts)
+            prov_name, model = models.user_answer_cfg()
+        else:
+            prov_name, tiers = models.internal_cfg()
+            model = tiers.get(complexity) or tiers.get("small") or next(iter(tiers.values()), None)
+        return self._call_with_fallback(task_type, prov_name, model, complexity, messages, **opts)
 
-    def _user_answer(self, messages, session, **opts) -> ProviderResult:
-        provider_name, model, max_calls = models.user_answer_model()
-        cfg = config.load_ai_config()
-
-        # Try Gemini if it's the chosen provider, within budget, and configured.
-        if provider_name == "gemini" and session.gemini_calls < max_calls and self.gemini.available():
+    def _call_with_fallback(self, task_type, prov_name, model, complexity, messages, **opts):
+        # 1) primary provider
+        prov = self.providers.get(prov_name)
+        resolved = self._resolve_model(prov_name, model, complexity)
+        if prov is not None and prov.available() and resolved:
             try:
-                result = self._timed("user_answer", self.gemini, messages, model, **opts)
-                session.gemini_calls += 1
-                return result
+                return self._timed(task_type, prov, messages, resolved, **opts)
             except ProviderError as e:
-                self._log("user_answer", "gemini", model, ok=False, ms=0, error=str(e))
-                if not cfg.get("fallback_to_ollama", True):
-                    raise
+                self._log(task_type, prov_name, resolved, ok=False, ms=0, error=str(e))
 
-        # Fallback (or non-Gemini config): answer locally with a capable Ollama model.
-        local_model = self._pick_ollama_model(models.ollama_model_for(_USER_FALLBACK_TIER))
-        return self._timed("user_answer", self.ollama, messages, local_model, **opts)
+        # 2) fallback provider (e.g., local Ollama)
+        fb_name = models.fallback_provider()
+        if fb_name and fb_name != prov_name:
+            fb = self.providers.get(fb_name)
+            fb_model = self._resolve_model(fb_name, None, complexity)
+            if fb is not None and fb.available() and fb_model:
+                return self._timed(task_type, fb, messages, fb_model, **opts)
 
-    def _internal(self, task_type, messages, complexity, **opts) -> ProviderResult:
-        model = self._pick_ollama_model(models.ollama_model_for(complexity))
-        return self._timed(task_type, self.ollama, messages, model, **opts)
+        raise ProviderError(f"No AI provider available for '{task_type}' "
+                            f"(tried '{prov_name}', fallback '{fb_name}').")
+
+    def _resolve_model(self, prov_name, model, complexity):
+        """Pick a concrete model name for a provider (handles Ollama install fallback)."""
+        if prov_name == "ollama":
+            m = model or models.ollama_model_for(complexity or "medium")
+            return self._pick_ollama_model(m)
+        if prov_name == "gemini":
+            return model or models.gemini_model()
+        if prov_name == "groq":
+            if model:
+                return model
+            _, tiers = models.internal_cfg()
+            return tiers.get(complexity or "small") or "llama-3.1-8b-instant"
+        return model
+
+    def _pick_ollama_model(self, requested: str) -> str:
+        """Fall back to an installed Ollama model if the requested one isn't pulled."""
+        if self._ollama_models_cache is None:
+            self._ollama_models_cache = self.ollama.available_models()
+        installed = self._ollama_models_cache
+        if not installed or requested in installed:
+            return requested
+        base = requested.split(":")[0]
+        same_family = [m for m in installed if m.split(":")[0] == base]
+        return (same_family or installed)[0]
 
     # ----- execution + logging ---------------------------------------------
     def _timed(self, task_type, provider, messages, model, **opts) -> ProviderResult:
@@ -127,12 +133,8 @@ class AICenter:
         paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
         entry = {
             "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "task_type": task_type,
-            "provider": provider,
-            "model": model,
-            "ok": ok,
-            "ms": ms,
-            "usage": usage or {},
+            "task_type": task_type, "provider": provider, "model": model,
+            "ok": ok, "ms": ms, "usage": usage or {},
         }
         if error:
             entry["error"] = error

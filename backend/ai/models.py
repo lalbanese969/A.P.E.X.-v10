@@ -1,7 +1,11 @@
 """
-models.py — map a complexity tier ("small"/"medium"/"large") to a concrete Ollama
-model name, using config/ai_center.json. Centralizes the "which model" decision so
-the AI Center stays about routing, not model names.
+models.py — resolve which provider + model handles a task, from config/ai_center.json.
+
+Routing config shape:
+  user_answer : { provider, model }            -> the user-facing answer
+  internal    : { provider, tiers:{small,...} } -> internal tasks by complexity tier
+  fallback_provider : "ollama"                  -> used if the chosen provider is down
+  ollama_tiers / gemini_model                   -> models for those providers when used
 """
 
 from __future__ import annotations
@@ -9,25 +13,31 @@ from __future__ import annotations
 from . import config
 
 
+def user_answer_cfg() -> tuple[str, str]:
+    """(provider, model) for the user-facing answer."""
+    ua = config.load_ai_config().get("user_answer", {})
+    return ua.get("provider", "groq"), ua.get("model", "llama-3.3-70b-versatile")
+
+
+def internal_cfg() -> tuple[str, dict]:
+    """(provider, tiers-dict) for internal tasks."""
+    ic = config.load_ai_config().get("internal", {})
+    return ic.get("provider", "groq"), ic.get("tiers", {})
+
+
+def fallback_provider() -> str:
+    return config.load_ai_config().get("fallback_provider", "ollama")
+
+
+def gemini_model() -> str:
+    return config.load_ai_config().get("gemini_model", "gemini-2.0-flash")
+
+
 def ollama_model_for(tier: str) -> str:
-    """Return the configured Ollama model name for a complexity tier."""
+    """Configured Ollama model for a complexity tier (used when Ollama is the provider/fallback)."""
     cfg = config.load_ai_config()
     tiers = cfg.get("ollama_tiers", {})
     if tier in tiers:
         return tiers[tier]
-    # fall back to the default internal tier, then to anything available
     default_tier = cfg.get("default_internal_tier", "small")
-    if default_tier in tiers:
-        return tiers[default_tier]
-    return next(iter(tiers.values()), "llama3.2:3b")
-
-
-def user_answer_model() -> tuple[str, str, int]:
-    """Return (provider, model, max_calls_per_turn) for the user-facing answer."""
-    cfg = config.load_ai_config()
-    ua = cfg.get("user_answer", {})
-    return (
-        ua.get("provider", "gemini"),
-        ua.get("model", "gemini-2.0-flash"),
-        int(ua.get("max_calls_per_turn", 1)),
-    )
+    return tiers.get(default_tier) or next(iter(tiers.values()), "llama3.2:3b")

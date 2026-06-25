@@ -12,6 +12,7 @@ so the system still runs (and simply has no Gemini key).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -24,12 +25,20 @@ SECRETS_EXAMPLE     = REPO_ROOT / "secrets" / "secrets.example.json"
 
 
 # ---- defaults used if config/ai_center.json is absent ----------------------
+# Provider-based routing: pick a provider per task type. Groq (fast, free-tier cloud)
+# is the default brain; Ollama (local) is the fallback when a provider is unreachable.
 _DEFAULT_CONFIG: dict[str, Any] = {
-    "user_answer": {"provider": "gemini", "model": "gemini-2.0-flash", "max_calls_per_turn": 1},
+    "user_answer": {"provider": "groq", "model": "llama-3.3-70b-versatile"},
+    "internal": {
+        "provider": "groq",
+        "tiers": {"small": "llama-3.1-8b-instant", "medium": "llama-3.1-8b-instant",
+                  "large": "llama-3.3-70b-versatile"},
+    },
+    "fallback_provider": "ollama",
+    "gemini_model": "gemini-2.0-flash",
     "ollama_host": "http://localhost:11434",
     "ollama_auth_header": None,
     "ollama_tiers": {"small": "llama3.2:3b", "medium": "llama3.1:8b", "large": "qwen2.5:14b"},
-    "fallback_to_ollama": True,
     "default_internal_tier": "small",
 }
 
@@ -59,9 +68,22 @@ def load_secrets() -> dict[str, Any]:
     return {}
 
 
+def _provider_key(name: str, env_var: str) -> str:
+    """Read an API key: env var first (for cloud hosts), then secrets.json."""
+    env = os.environ.get(env_var, "").strip()
+    if env:
+        return env
+    return (load_secrets().get("ai_providers", {}) or {}).get(name, "") or ""
+
+
 def gemini_api_key() -> str:
-    """Return the Gemini API key from secrets, or '' if not configured."""
-    return (load_secrets().get("ai_providers", {}) or {}).get("gemini_api_key", "") or ""
+    """Return the Gemini API key (env GEMINI_API_KEY or secrets), or '' if unset."""
+    return _provider_key("gemini_api_key", "GEMINI_API_KEY")
+
+
+def groq_api_key() -> str:
+    """Return the Groq API key (env GROQ_API_KEY or secrets), or '' if unset."""
+    return _provider_key("groq_api_key", "GROQ_API_KEY")
 
 
 def ollama_settings() -> tuple[str, str | None]:

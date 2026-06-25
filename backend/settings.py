@@ -25,7 +25,7 @@ from .ai.center import AICenter
 from .connections import accounts as accounts_mod
 
 # allowed top-level keys we let the UI edit in ai_center.json
-_AI_SCALAR_KEYS = {"ollama_host", "ollama_auth_header", "fallback_to_ollama", "default_internal_tier"}
+_AI_SCALAR_KEYS = {"ollama_host", "ollama_auth_header", "fallback_provider", "default_internal_tier"}
 
 
 # ---------------------------------------------------------------------------
@@ -39,12 +39,13 @@ def get_settings() -> dict[str, Any]:
     return {
         "ai_center": {
             "user_answer": cfg.get("user_answer", {}),
+            "internal": cfg.get("internal", {}),
+            "fallback_provider": cfg.get("fallback_provider", "ollama"),
             "ollama_host": cfg.get("ollama_host"),
             "ollama_auth_header_set": bool(cfg.get("ollama_auth_header")),
             "ollama_tiers": cfg.get("ollama_tiers", {}),
-            "fallback_to_ollama": cfg.get("fallback_to_ollama", True),
-            "default_internal_tier": cfg.get("default_internal_tier", "small"),
         },
+        "groq_key_set": center.groq.available(),
         "gemini_key_set": center.gemini.available(),
         "ollama_reachable": center.ollama.available(),
         "installed_models": center.ollama.available_models(),
@@ -70,7 +71,9 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
     if "ai_center" in patch and isinstance(patch["ai_center"], dict):
         _update_ai_center(patch["ai_center"])
     if patch.get("gemini_api_key"):
-        _set_gemini_key(patch["gemini_api_key"].strip())
+        _set_provider_key("gemini_api_key", patch["gemini_api_key"].strip())
+    if patch.get("groq_api_key"):
+        _set_provider_key("groq_api_key", patch["groq_api_key"].strip())
     if "accounts" in patch and isinstance(patch["accounts"], list):
         _update_account_labels(patch["accounts"])
     if isinstance(patch.get("add_account"), dict):
@@ -129,12 +132,12 @@ def _update_ai_center(patch: dict[str, Any]) -> None:
     _save_json(ai_config.AI_CONFIG_FILE, cfg)
 
 
-def _set_gemini_key(key: str) -> None:
-    """Write the Gemini key into secrets.json (created from the example if missing)."""
+def _set_provider_key(field: str, key: str) -> None:
+    """Write an AI provider key into secrets.json (created from the example if missing)."""
     secrets = _load_json(ai_config.SECRETS_FILE, default=None)
     if secrets is None:
         secrets = _load_json(ai_config.SECRETS_EXAMPLE, default={}) or {}
-    secrets.setdefault("ai_providers", {})["gemini_api_key"] = key
+    secrets.setdefault("ai_providers", {})[field] = key
     ai_config.SECRETS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _save_json(ai_config.SECRETS_FILE, secrets)
 

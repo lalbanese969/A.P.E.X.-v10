@@ -1,13 +1,12 @@
 """
-test_ai_center.py — verify AI Center routing + Gemini budget guard.
+test_ai_center.py — verify AI Center provider routing + fallback.
 
 Run from the repo root:
 
     python scripts/test_ai_center.py
 
-This does NOT require Ollama or a Gemini key to pass the routing checks — it stubs the
-providers so it can verify the decisions (which brain, budget cap, fallback) deterministically.
-At the end it ALSO reports whether your real Ollama / Gemini are reachable, as info.
+Providers are stubbed so routing is deterministic and needs no real keys/Ollama.
+At the end it reports real reachability (Groq key / Ollama / Gemini key) as info.
 """
 
 from __future__ import annotations
@@ -19,11 +18,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from backend.ai import center as center_mod, config            # noqa: E402
-from backend.ai.providers.base import ProviderResult, ProviderError  # noqa: E402
+from backend.ai.providers.base import ProviderError, ProviderResult  # noqa: E402
 
 
 class FakeProvider:
-    """Records calls and returns canned text, so routing is testable offline."""
     def __init__(self, name, ok=True):
         self.name = name
         self.ok = ok
@@ -33,7 +31,7 @@ class FakeProvider:
         return self.ok
 
     def available_models(self):
-        return []  # empty -> AI Center uses the requested model as-is (fine for routing tests)
+        return []
 
     def generate(self, messages, model, **opts):
         self.calls.append(model)
@@ -42,10 +40,12 @@ class FakeProvider:
         return ProviderResult(text=f"[{self.name}:{model}] ok", provider=self.name, model=model)
 
 
-def make_center(gemini_ok=True, ollama_ok=True):
+def make_center(groq_ok=True, gemini_ok=True, ollama_ok=True):
     c = center_mod.AICenter()
-    c.gemini = FakeProvider("gemini", ok=gemini_ok)
-    c.ollama = FakeProvider("ollama", ok=ollama_ok)
+    c.groq = FakeProvider("groq", groq_ok)
+    c.gemini = FakeProvider("gemini", gemini_ok)
+    c.ollama = FakeProvider("ollama", ollama_ok)
+    c.providers = {"groq": c.groq, "gemini": c.gemini, "ollama": c.ollama}
     return c
 
 
@@ -56,41 +56,34 @@ def check(label, cond):
 
 def main() -> int:
     print("=" * 64)
-    print("AI Center — routing + budget tests (providers stubbed)")
+    print("AI Center — provider routing + fallback (stubbed)")
     print("=" * 64)
     ok = True
 
-    # 1) internal task -> Ollama
-    c = make_center()
-    sess = c.session()
-    r = sess.run_task("classify", [{"role": "user", "content": "hi"}], "small")
-    ok &= check("internal 'classify' routes to Ollama", r.provider == "ollama")
+    # 1) user_answer -> primary provider (groq by default config)
+    r = make_center().session().run_task("user_answer", [{"role": "user", "content": "hi"}])
+    ok &= check("user_answer routes to primary provider (groq)", r.provider == "groq")
 
-    # 2) user_answer -> Gemini (when available + in budget)
-    c = make_center()
-    sess = c.session()
-    r = sess.run_task("user_answer", [{"role": "user", "content": "hi"}])
-    ok &= check("'user_answer' routes to Gemini", r.provider == "gemini")
+    # 2) internal task -> primary provider (groq)
+    r = make_center().session().run_task("classify", [{"role": "user", "content": "hi"}], "small")
+    ok &= check("internal 'classify' routes to primary provider (groq)", r.provider == "groq")
 
-    # 3) Gemini per-turn budget guard (default 1) -> 2nd call falls back to Ollama
-    _, _, max_calls = __import__("backend.ai.models", fromlist=["user_answer_model"]).user_answer_model()
-    c = make_center()
-    sess = c.session()
-    sess.run_task("user_answer", [{"role": "user", "content": "1"}])
-    r2 = sess.run_task("user_answer", [{"role": "user", "content": "2"}])
-    expect_fallback = (max_calls <= 1)
-    ok &= check(f"2nd user_answer falls back to Ollama (budget={max_calls})",
-                (r2.provider == "ollama") == expect_fallback)
+    # 3) primary down -> fallback provider (ollama)
+    r = make_center(groq_ok=False).session().run_task("user_answer", [{"role": "user", "content": "hi"}])
+    ok &= check("primary down -> falls back to ollama", r.provider == "ollama")
 
-    # 4) Gemini down -> fallback to Ollama
-    c = make_center(gemini_ok=False)
-    sess = c.session()
-    r = sess.run_task("user_answer", [{"role": "user", "content": "hi"}])
-    ok &= check("Gemini unavailable -> Ollama fallback", r.provider == "ollama")
+    # 4) primary + fallback down -> ProviderError
+    raised = False
+    try:
+        make_center(groq_ok=False, ollama_ok=False).session().run_task(
+            "user_answer", [{"role": "user", "content": "hi"}])
+    except ProviderError:
+        raised = True
+    ok &= check("primary + fallback down -> raises ProviderError", raised)
 
-    # info: real reachability
     print("\nLive reachability (informational):")
     real = center_mod.AICenter()
+    print(f"  Groq key configured:  {'yes' if real.groq.available() else 'no'}")
     print(f"  Ollama at {config.ollama_settings()[0]}: {'reachable' if real.ollama.available() else 'NOT reachable'}")
     print(f"  Gemini key configured: {'yes' if real.gemini.available() else 'no'}")
 

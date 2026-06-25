@@ -98,6 +98,7 @@ class ApexHandler(SimpleHTTPRequestHandler):
         """What's configured — booleans only, NEVER the secret values."""
         center = AICenter()
         return {
+            "groq": {"configured": center.groq.available()},
             "ollama": {"host": ai_config.ollama_settings()[0], "reachable": center.ollama.available()},
             "gemini": {"configured": center.gemini.available()},
             "accounts": [{"id": a["id"], "label": a["label"], "type": a["type"],

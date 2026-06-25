@@ -554,6 +554,7 @@ body {
 
     <!-- [HTML:STATUS] connection status (filled by [JS:STATUS] from /api/status) -->
     <div id="status-strip">
+      <div class="st-row"><span class="st-dot" id="st-groq"></span><span id="st-groq-txt">Groq …</span></div>
       <div class="st-row"><span class="st-dot" id="st-ollama"></span><span id="st-ollama-txt">Ollama …</span></div>
       <div class="st-row"><span class="st-dot" id="st-gemini"></span><span id="st-gemini-txt">Gemini …</span></div>
       <div class="st-row"><span class="st-dot" id="st-accounts"></span><span id="st-accounts-txt">Accounts …</span></div>
@@ -1127,6 +1128,9 @@ body {
   async function loadStatus() {
     try {
       const s = await (await fetch("/api/status")).json();
+      setDot("st-groq", s.groq && s.groq.configured);
+      document.getElementById("st-groq-txt").textContent =
+        "Groq " + (s.groq && s.groq.configured ? "ready" : "no key");
       setDot("st-ollama", s.ollama && s.ollama.reachable);
       document.getElementById("st-ollama-txt").textContent =
         "Ollama " + (s.ollama && s.ollama.reachable ? "online" : "offline");
@@ -1163,6 +1167,7 @@ body {
     current = s;
     const ai = s.ai_center || {};
     const ua = ai.user_answer || {};
+    const intern = ai.internal || {};
     const tiers = ai.ollama_tiers || {};
     const models = s.installed_models || [];
     const datalist = `<datalist id="model-list">${models.map(m => `<option value="${esc(m)}">`).join("")}</datalist>`;
@@ -1192,12 +1197,16 @@ body {
       </div>
 
       <div class="set-section">
-        <h3>Gemini (paid, user-facing brain)</h3>
+        <h3>AI brains</h3>
         <div class="set-row">
-          <label>API key ${s.gemini_key_set ? "(leave blank to keep current)" : ""}</label>
-          <input id="set-gemini-key" type="password" placeholder="${s.gemini_key_set ? "••••••••" : "paste key"}">
+          <label>Groq API key — main brain, fast + free tier ${s.groq_key_set ? "(leave blank to keep current)" : ""}</label>
+          <input id="set-groq-key" type="password" placeholder="${s.groq_key_set ? "••••••••" : "paste Groq key"}">
         </div>
-        <div class="set-note">Model: ${esc(ua.model)} · just ask me to change the model.</div>
+        <div class="set-row">
+          <label>Gemini API key — optional ${s.gemini_key_set ? "(leave blank to keep current)" : ""}</label>
+          <input id="set-gemini-key" type="password" placeholder="${s.gemini_key_set ? "••••••••" : "paste Gemini key"}">
+        </div>
+        <div class="set-note">Answers: <b>${esc(ua.provider)}</b> · ${esc(ua.model)} &nbsp;|&nbsp; Internal: ${esc(intern.provider)} &nbsp;|&nbsp; Fallback: ${esc(ai.fallback_provider)}. Ask me to change models.</div>
       </div>
 
       <div class="set-section">
@@ -1272,8 +1281,10 @@ body {
         purpose: el.querySelector(".acct-purpose").value,
       })),
     };
-    const key = val("set-gemini-key");
-    if (key) patch.gemini_api_key = key;
+    const gkey = val("set-gemini-key");
+    if (gkey) patch.gemini_api_key = gkey;
+    const qkey = val("set-groq-key");
+    if (qkey) patch.groq_api_key = qkey;
     postPatch(patch, "✓ saved");
   }
 
