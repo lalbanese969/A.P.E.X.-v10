@@ -10,7 +10,13 @@ Run from the repo root:
 
     python -m backend.server          (or)   python backend/server.py
 
-Then open  http://localhost:8765/index.html
+Then open  http://localhost:8765/index.html  on THIS computer, or
+           http://<this-PC's-LAN-IP>:8765/index.html  from another device on the same WiFi
+           (e.g. an iPad) — find the IP with `ipconfig` (Windows) and look for "IPv4 Address".
+
+Binds to 0.0.0.0 (all network interfaces) by default — reachable from other devices on your
+LAN. This also happens to be the correct bind address for cloud hosts later (Render/Railway
+etc. expect 0.0.0.0 + the PORT they assign). Override with the APEX_HOST / PORT env vars.
 
 This intentionally avoids a web framework (FastAPI/Flask/Express) for now so we add
 no dependencies. When Phase 2 wires in a real AI provider, this can be swapped for a
@@ -20,6 +26,7 @@ framework if we decide we need one — the pipeline logic lives in pipeline.py, 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -37,8 +44,8 @@ from backend.ai.center import AICenter  # noqa: E402
 from backend.ai import config as ai_config  # noqa: E402
 from backend import settings as settings_mod  # noqa: E402
 
-PORT = 8765
-HOST = "127.0.0.1"
+PORT = int(os.environ.get("PORT", 8765))
+HOST = os.environ.get("APEX_HOST", "0.0.0.0")  # 0.0.0.0 = reachable on your LAN (and cloud hosts)
 
 
 class ApexHandler(SimpleHTTPRequestHandler):
