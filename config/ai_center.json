@@ -1,12 +1,10 @@
 {
   "_README": "AI Center config (NOT secret). Provider routing for APEX. API keys live in secrets/secrets.json (or env vars), NOT here. Ask APEX to change models for you.",
-
   "user_answer": {
     "_doc": "The user-facing answer. Default brain = Groq (fast, free-tier cloud).",
     "provider": "groq",
     "model": "llama-3.3-70b-versatile"
   },
-
   "internal": {
     "_doc": "Internal tasks (intent classify, style extraction). Cheaper/smaller models per tier.",
     "provider": "groq",
@@ -16,12 +14,9 @@
       "large": "llama-3.3-70b-versatile"
     }
   },
-
   "fallback_provider": "ollama",
   "_fallback_note": "If the chosen provider is down/unconfigured, fall back to this one (local Ollama).",
-
   "gemini_model": "gemini-2.0-flash",
-
   "ollama_host": "http://localhost:11434",
   "ollama_auth_header": null,
   "_ollama_cloud_note": "For a remote/cloud Ollama, change ollama_host and set ollama_auth_header to 'Bearer TOKEN'.",

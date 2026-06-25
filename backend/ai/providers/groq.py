@@ -39,7 +39,14 @@ class GroqProvider(Provider):
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             _API_URL, data=data, method="POST",
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+                # Cloudflare (fronting api.groq.com) blocks the default urllib User-Agent
+                # as bot traffic (HTTP 403 / Cloudflare error 1010) — a normal-looking UA fixes it.
+                "User-Agent": "Mozilla/5.0 (compatible; APEX-AI-Center/1.0)",
+                "Accept": "application/json",
+            },
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
