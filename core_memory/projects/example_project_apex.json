@@ -1,0 +1,38 @@
+{
+  "id": "project_apex_001",
+  "type": "project",
+  "display_name": "A.P.E.X.",
+  "status": "active",
+  "summary": "A.P.E.X. (Adaptive Personal Executive Xpert) is the user's custom modular AI assistant. One assistant to the user, modular systems behind the scenes. Currently building the memory foundation.",
+  "goals": [
+    "Feel like a single natural assistant to the user.",
+    "Use efficient memory (catalog + resolver + small packet) instead of dumping all memory into the prompt.",
+    "Support actions/tools (calendar, email, files, hardware) as real backend jobs — later phases.",
+    "Adapt to the user via an evolving A.P.E.X. self-profile.",
+    "Stay secure: secrets isolated, permissions and approvals for risky actions."
+  ],
+  "components": [
+    "UI (index.html)",
+    "Memory system (catalog, resolver, packet builder, writer)",
+    "A.P.E.X. self-profile",
+    "Reflection / prompt optimizer (later)",
+    "Actions system + tool router (later)",
+    "Tools layer + registry (later)",
+    "Autonomy / triggers (later)",
+    "Security / control (ongoing)"
+  ],
+  "decisions": [
+    { "text": "Memory V1 uses Python standard library only and local JSON — no web framework, no AI provider, no dependencies.", "date": "2026-06-24" },
+    { "text": "Semantic search is faked with alias/tag/name matching for now; clean interface so embeddings can be added later.", "date": "2026-06-24" },
+    { "text": "Memory Writer is non-destructive: it logs proposed writes, never auto-edits memory.", "date": "2026-06-24" },
+    { "text": "Secrets live only in secrets/ (git-ignored) and are never referenced from memory.", "date": "2026-06-24" }
+  ],
+  "open_questions": [
+    "Which backend framework for Phase 2 (FastAPI vs Node/Express)?",
+    "Which AI provider powers the main brain (Claude vs GPT vs switchable)?"
+  ],
+  "tags": ["apex", "project", "assistant", "ai", "build", "memory"],
+  "confidence": 1.0,
+  "source": "user",
+  "last_updated": "2026-06-24"
+}

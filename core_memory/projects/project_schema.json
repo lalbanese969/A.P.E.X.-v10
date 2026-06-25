@@ -1,0 +1,33 @@
+{
+  "_README": "SCHEMA + field docs for a project record. Copy the shape below for new projects. This file documents each field; it is not a real project.",
+  "_field_docs": {
+    "id": "Stable unique id, e.g. 'project_apex_001'. Must match the catalog card id.",
+    "display_name": "Project name.",
+    "status": "e.g. 'active', 'planning', 'paused', 'done'.",
+    "summary": "One or two sentence overview.",
+    "goals": "List of strings — what the project is trying to achieve.",
+    "components": "List of strings — major parts/subsystems.",
+    "decisions": "List of {text, date} — locked-in decisions worth remembering.",
+    "open_questions": "List of strings — unresolved questions.",
+    "tags": "List of strings for retrieval.",
+    "confidence": "0.0-1.0.",
+    "source": "'user', 'inferred', 'imported'.",
+    "last_updated": "ISO date."
+  },
+
+  "_template": {
+    "id": "",
+    "type": "project",
+    "display_name": "",
+    "status": "active",
+    "summary": "",
+    "goals": [],
+    "components": [],
+    "decisions": [],
+    "open_questions": [],
+    "tags": [],
+    "confidence": 1.0,
+    "source": "user",
+    "last_updated": ""
+  }
+}

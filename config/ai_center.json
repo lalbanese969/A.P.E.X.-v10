@@ -1,0 +1,20 @@
+{
+  "_README": "AI Center config (NOT secret). Edit model names to match what you have. Gemini API key lives in secrets/secrets.json, NOT here.",
+  "user_answer": {
+    "_doc": "The PAID, user-facing brain. max_calls_per_turn caps Gemini usage per UI turn.",
+    "provider": "gemini",
+    "model": "gemini-2.0-flash",
+    "max_calls_per_turn": 1
+  },
+  "ollama_host": "http://localhost:11434",
+  "ollama_auth_header": null,
+  "_ollama_cloud_note": "To use a cloud/remote Ollama, change ollama_host to its URL and set ollama_auth_header to e.g. 'Bearer YOUR_TOKEN'.",
+  "ollama_tiers": {
+    "_doc": "Map complexity -> a model you've pulled with `ollama pull`. Simple tasks use 'small'.",
+    "small": "llama3.2:3b",
+    "medium": "llama3.1:8b",
+    "large": "qwen2.5:14b"
+  },
+  "fallback_to_ollama": true,
+  "default_internal_tier": "small"
+}

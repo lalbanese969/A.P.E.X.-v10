@@ -1,0 +1,30 @@
+{
+  "_README": "Connected-account registry (NOT secret). Labels/purposes live here; real OAuth tokens go in secrets/secrets.json keyed by account id. status: 'mock' = sample data, 'live' = real OAuth (later).",
+  "accounts": [
+    {
+      "id": "gmail_personal",
+      "label": "Personal Gmail",
+      "type": "gmail",
+      "address": "you.personal@gmail.com",
+      "purpose": "personal",
+      "status": "mock"
+    },
+    {
+      "id": "outlook_work",
+      "label": "Work Outlook",
+      "type": "outlook",
+      "address": "you@company.com",
+      "purpose": "work",
+      "status": "mock"
+    }
+  ],
+  "calendars": [
+    {
+      "id": "gcal_primary",
+      "label": "Primary (Google)",
+      "type": "google",
+      "purpose": "main",
+      "status": "mock"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "_README": "A.P.E.X. learned WRITING STYLE for drafting emails/messages. Seeded 'friendly + professional'. It GROWS by appending preferences from user feedback on drafts (handled by the Ollama 'extract_style' loop in pipeline.py). Never blindly overwritten; every change is logged in history.",
+  "version": 1,
+  "last_updated": "2026-06-25",
+  "tone": "friendly and professional",
+  "defaults": {
+    "greeting": "warm but brief",
+    "sign_off": "Thanks,",
+    "length": "concise",
+    "formality": "medium"
+  },
+  "learned_preferences": [
+    {
+      "date": "2026-06-25",
+      "preference": "Make it concise.",
+      "source": "user_feedback"
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-06-25",
+      "change": "Seeded with friendly + professional defaults.",
+      "by": "system"
+    },
+    {
+      "date": "2026-06-25",
+      "change": "Added writing preference: Make it concise.",
+      "by": "user_feedback"
+    }
+  ]
+}

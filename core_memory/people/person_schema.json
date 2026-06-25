@@ -1,0 +1,44 @@
+{
+  "_README": "SCHEMA + field docs for a person record. Copy the shape below for new people. This file documents each field; it is not a real person. Use backend/memory/schemas.py:new_person() to generate a blank record programmatically.",
+  "_field_docs": {
+    "id": "Stable unique id, e.g. 'person_taylor_001'. Must match the catalog card id.",
+    "display_name": "What A.P.E.X. calls them, e.g. 'Taylor'.",
+    "first_name / middle_name / last_name": "Name parts; any may be empty.",
+    "aliases": "Other ways the user refers to them, incl. relationship words like 'my girlfriend'.",
+    "relationship_to_user": "e.g. 'girlfriend', 'brother', 'coworker'.",
+    "birthday": "ISO date 'YYYY-MM-DD' (year may be approximate). Age is computed on demand, never stored stale.",
+    "important_dates": "List of {label, date} e.g. anniversary.",
+    "preferences": "Free-form object of misc preferences (key -> value).",
+    "likes / dislikes": "Lists of strings.",
+    "favorite_foods / favorite_places / hobbies / gift_ideas / important_notes": "Lists of strings.",
+    "conversation_notes": "List of {text, date, source} captured from chats.",
+    "confidence": "0.0-1.0 how sure A.P.E.X. is about this record overall.",
+    "source": "How it was learned: 'user', 'inferred', 'imported'.",
+    "last_updated": "ISO date of last edit."
+  },
+
+  "_template": {
+    "id": "",
+    "type": "person",
+    "display_name": "",
+    "first_name": "",
+    "middle_name": "",
+    "last_name": "",
+    "aliases": [],
+    "relationship_to_user": "",
+    "birthday": null,
+    "important_dates": [],
+    "preferences": {},
+    "likes": [],
+    "dislikes": [],
+    "favorite_foods": [],
+    "favorite_places": [],
+    "hobbies": [],
+    "gift_ideas": [],
+    "important_notes": [],
+    "conversation_notes": [],
+    "confidence": 1.0,
+    "source": "user",
+    "last_updated": ""
+  }
+}

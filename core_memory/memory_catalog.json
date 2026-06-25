@@ -1,0 +1,33 @@
+{
+  "_README": "Lightweight TABLE OF CONTENTS for A.P.E.X. memory. Cards only — NO full memory here. The resolver scans these cards to decide which memory files to open. Keep cards small.",
+  "version": 1,
+  "last_updated": "2026-06-24",
+  "cards": [
+    {
+      "id": "person_taylor_001",
+      "type": "person",
+      "display_name": "Taylor",
+      "aliases": ["Tay", "girlfriend", "my girlfriend"],
+      "relationship_to_user": "girlfriend",
+      "summary_card": "Girlfriend. Likes sushi and hiking. Birthday in spring (April 12).",
+      "memory_file": "core_memory/people/example_person_taylor.json",
+      "available_sections": ["identity", "birthday", "preferences", "likes", "dislikes", "favorite_foods", "hobbies", "gift_ideas", "important_notes"],
+      "tags": ["girlfriend", "relationship", "gifts", "birthday", "people"],
+      "importance": 5,
+      "last_updated": "2026-06-24"
+    },
+    {
+      "id": "project_apex_001",
+      "type": "project",
+      "display_name": "A.P.E.X.",
+      "aliases": ["apex", "a.p.e.x.", "apex v10", "the assistant project"],
+      "relationship_to_user": null,
+      "summary_card": "A.P.E.X. (Adaptive Personal Executive Xpert): the user's custom modular AI assistant. Currently building the memory foundation.",
+      "memory_file": "core_memory/projects/example_project_apex.json",
+      "available_sections": ["identity", "status", "goals", "components", "decisions", "open_questions"],
+      "tags": ["apex", "project", "assistant", "ai", "build"],
+      "importance": 5,
+      "last_updated": "2026-06-24"
+    }
+  ]
+}

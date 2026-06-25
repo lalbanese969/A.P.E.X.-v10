@@ -1,0 +1,33 @@
+# ──────────────────────────────────────────────────────────────────────────
+#  A.P.E.X. .gitignore
+#  Goal: never commit secrets, and skip generated/cache junk.
+# ──────────────────────────────────────────────────────────────────────────
+
+# --- Secrets (NEVER commit) ---
+# Ignore everything in secrets/ EXCEPT the example template and the keep-file.
+secrets/*
+!secrets/.gitkeep
+!secrets/secrets.example.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Runtime logs (created on demand by the app; keep out of the repo) ---
+core_memory/logs/*.jsonl
+!core_memory/logs/.gitkeep
+
+# --- Local AI config that may hold a private cloud-Ollama URL/token ---
+# (ai_center.json is committed as a template; if you put private hosts in it, ignore it instead)
+
+# --- Notes ---
+# core_memory/ IS tracked on purpose (it's the editable memory store; example data only, no secrets).
+# secrets/ is ignored above except the example template.
