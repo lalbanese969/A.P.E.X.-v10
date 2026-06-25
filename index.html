@@ -552,10 +552,9 @@ body {
       <div class="nav-item" data-view="settings" id="nav-settings"><span class="icon">⚙️</span><span>Settings</span></div>
     </nav>
 
-    <!-- [HTML:STATUS] connection status (filled by [JS:STATUS] from /api/status) -->
+    <!-- [HTML:STATUS] connection status (filled by [JS:STATUS] from js/settings.js, localStorage) -->
     <div id="status-strip">
       <div class="st-row"><span class="st-dot" id="st-groq"></span><span id="st-groq-txt">Groq …</span></div>
-      <div class="st-row"><span class="st-dot" id="st-ollama"></span><span id="st-ollama-txt">Ollama …</span></div>
       <div class="st-row"><span class="st-dot" id="st-gemini"></span><span id="st-gemini-txt">Gemini …</span></div>
       <div class="st-row"><span class="st-dot" id="st-accounts"></span><span id="st-accounts-txt">Accounts …</span></div>
     </div>
@@ -611,7 +610,19 @@ body {
 
 </div>
 
-<script>
+<script type="module">
+/* ============================================================================
+   [JS:IMPORTS]  —  A.P.E.X. now runs entirely client-side (no backend server).
+   These modules (in js/) replace the old Python backend: memory, the AI Center
+   (Groq/Gemini, called directly from this browser), the action pipeline, mock
+   email/calendar connections, and settings — all backed by localStorage.
+   See python_backend_legacy/ for the original Python implementation.
+   ============================================================================ */
+import * as memoryMod from "./js/memory.js";
+import * as pipelineMod from "./js/pipeline.js";
+import * as connectionsMod from "./js/connections.js";
+import * as settingsMod from "./js/settings.js";
+
 /* ============================================================================
    [JS:HONEYCOMB]  —  animated honeycomb background
    ----------------------------------------------------------------------------
@@ -897,16 +908,14 @@ body {
 
 
 /* ============================================================================
-   [JS:CHAT]  —  sending messages (connected to the A.P.E.X. memory backend)
+   [JS:CHAT]  —  sending messages (runs the pipeline directly, no server)
    ----------------------------------------------------------------------------
-   On send, the UI POSTs the prompt to  /api/chat  (served by backend/server.py).
-   The backend runs the Memory Resolver, builds a small Memory Packet, and returns
-   a (currently MOCKED) A.P.E.X. response that uses that packet.
+   On send, this calls pipeline.handlePrompt() (js/pipeline.js) right here in
+   the browser. That runs the Memory Resolver, picks an intent, calls Groq/
+   Gemini directly, and returns the response — no backend, no fetch().
 
-   If the backend isn't running (e.g. the page is opened via a plain static
-   server or file://), it falls back to a local placeholder so the UI still works.
-
-   To get real memory responses, run:   python -m backend.server
+   If no AI key is set yet, the pipeline itself returns a graceful "add a key
+   in Settings" message — see js/pipeline.js:memoryOnlyFallback.
    ============================================================================ */
 (function () {
   const input = document.getElementById("chat-input");
@@ -941,20 +950,14 @@ body {
     card.querySelector(".dc-to").value = draft.to || "";
     card.querySelector(".dc-subj").value = draft.subject || "";
     card.querySelector(".dc-body").value = draft.body || "";
-    card.querySelector(".dc-save").addEventListener("click", async () => {
-      const payload = {
+    card.querySelector(".dc-save").addEventListener("click", () => {
+      connectionsMod.createDraft({
         to: card.querySelector(".dc-to").value,
         subject: card.querySelector(".dc-subj").value,
         body: card.querySelector(".dc-body").value,
-        account_id: draft.account_id,
-      };
-      try {
-        await fetch("/api/email/draft", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        addMessage("(saved draft — nothing sent)", "apex");
-      } catch (e) { addMessage("(couldn't save draft — backend offline)", "apex"); }
+        accountId: draft.account_id,
+      });
+      addMessage("(saved draft — nothing sent)", "apex");
     });
     messages.appendChild(card);
     messages.scrollTop = messages.scrollHeight;
@@ -968,19 +971,14 @@ body {
     const thinking = addMessage("A.P.E.X. is thinking…", "apex");
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, prior_draft: lastDraft }),
-      });
-      if (!res.ok) throw new Error("backend status " + res.status);
-      const data = await res.json();
+      const data = await pipelineMod.handlePrompt(text, { priorDraft: lastDraft });
       thinking.textContent = data.apex_response;
       if (data.draft) renderDraft(data.draft);
       // Inspect what memory/intent/model was used in DevTools -> Console.
       console.log("[A.P.E.X.]", { intent: data.intent, ai: data.ai_meta, memory: data.memory_packet });
     } catch (err) {
-      thinking.textContent = "(offline — start the backend: python -m backend.server) you said: \"" + text + "\"";
+      console.error(err);
+      thinking.textContent = "(something went wrong — open DevTools console for details) you said: \"" + text + "\"";
     }
   }
 
@@ -1038,7 +1036,7 @@ body {
 
 
 /* ============================================================================
-   [JS:CALENDAR]  —  loads /api/calendar into the Calendar view
+   [JS:CALENDAR]  —  loads upcoming events (js/connections.js) into the view
    ============================================================================ */
 (function () {
   const listEl = document.getElementById("calendar-list");
@@ -1056,11 +1054,9 @@ body {
     return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
   }
 
-  async function loadCalendar() {
+  function loadCalendar() {
     try {
-      const res = await fetch("/api/calendar?days=14");
-      const data = await res.json();
-      const events = data.events || [];
+      const events = connectionsMod.upcomingEvents(14);
       if (!events.length) { listEl.innerHTML = '<div class="ev-loc">No upcoming events.</div>'; return; }
       let html = ""; let curDay = "";
       events.forEach((e) => {
@@ -1074,7 +1070,8 @@ body {
       });
       listEl.innerHTML = html;
     } catch (e) {
-      listEl.innerHTML = '<div class="ev-loc">Calendar unavailable — is the backend running?</div>';
+      console.error(e);
+      listEl.innerHTML = '<div class="ev-loc">Calendar unavailable — see DevTools console.</div>';
     }
   }
 
@@ -1084,23 +1081,23 @@ body {
 
 
 /* ============================================================================
-   [JS:EMAIL]  —  loads /api/accounts + /api/email into the Email view
+   [JS:EMAIL]  —  loads accounts (js/settings.js) + messages (js/connections.js)
    ============================================================================ */
 (function () {
   const acctEl = document.getElementById("email-accounts");
   const listEl = document.getElementById("email-list");
   let activeAccount = null;
 
-  async function loadEmail() {
+  function loadEmail() {
     try {
-      const accts = (await (await fetch("/api/accounts")).json()).accounts || [];
+      const accts = settingsMod.listAccounts();
       if (!activeAccount && accts.length) activeAccount = accts[0].id;
       acctEl.innerHTML = accts.map((a) =>
         `<span class="acct-chip ${a.id === activeAccount ? "active" : ""}" data-id="${a.id}">${a.label}</span>`).join("");
       acctEl.querySelectorAll(".acct-chip").forEach((c) =>
         c.addEventListener("click", () => { activeAccount = c.dataset.id; loadEmail(); }));
 
-      const msgs = (await (await fetch("/api/email?account=" + encodeURIComponent(activeAccount))).json()).messages || [];
+      const msgs = connectionsMod.listRecentEmail(activeAccount);
       listEl.innerHTML = msgs.length ? msgs.map((m) =>
         `<div class="email-card ${m.unread ? "unread" : ""}">
            <div class="em-from">${m.sender}</div>
@@ -1108,7 +1105,8 @@ body {
            <div class="em-snip">${m.snippet}</div>
          </div>`).join("") : '<div class="em-snip">No messages.</div>';
     } catch (e) {
-      listEl.innerHTML = '<div class="em-snip">Email unavailable — is the backend running?</div>';
+      console.error(e);
+      listEl.innerHTML = '<div class="em-snip">Email unavailable — see DevTools console.</div>';
     }
   }
 
@@ -1118,62 +1116,51 @@ body {
 
 
 /* ============================================================================
-   [JS:STATUS]  —  shows what's connected (from /api/status); no secret values
+   [JS:STATUS]  —  shows what's connected (js/settings.js); no secret values
    ============================================================================ */
 (function () {
   function setDot(id, ok) {
     const dot = document.getElementById(id);
     if (dot) dot.className = "st-dot " + (ok ? "ok" : "off");
   }
-  async function loadStatus() {
+  function loadStatus() {
     try {
-      const s = await (await fetch("/api/status")).json();
-      setDot("st-groq", s.groq && s.groq.configured);
-      document.getElementById("st-groq-txt").textContent =
-        "Groq " + (s.groq && s.groq.configured ? "ready" : "no key");
-      setDot("st-ollama", s.ollama && s.ollama.reachable);
-      document.getElementById("st-ollama-txt").textContent =
-        "Ollama " + (s.ollama && s.ollama.reachable ? "online" : "offline");
-      setDot("st-gemini", s.gemini && s.gemini.configured);
-      document.getElementById("st-gemini-txt").textContent =
-        "Gemini " + (s.gemini && s.gemini.configured ? "key set" : "no key");
+      const s = settingsMod.statusSnapshot();
+      setDot("st-groq", s.groq.configured);
+      document.getElementById("st-groq-txt").textContent = "Groq " + (s.groq.configured ? "ready" : "no key");
+      setDot("st-gemini", s.gemini.configured);
+      document.getElementById("st-gemini-txt").textContent = "Gemini " + (s.gemini.configured ? "key set" : "no key");
       const n = (s.accounts || []).length;
       setDot("st-accounts", n > 0);
       document.getElementById("st-accounts-txt").textContent = n + " account" + (n === 1 ? "" : "s");
     } catch (e) {
-      ["st-ollama", "st-gemini", "st-accounts"].forEach((d) => setDot(d, false));
-      document.getElementById("st-ollama-txt").textContent = "backend offline";
+      console.error(e);
     }
   }
   window.APEX = window.APEX || {};
   window.APEX.refreshStatus = loadStatus;
   loadStatus();
-  setInterval(loadStatus, 30000); // refresh every 30s
 })();
 
 
 /* ============================================================================
-   [JS:SETTINGS]  —  the Settings page (GET/POST /api/settings)
-   Lets you set the Gemini key, AI Center models/host, and account labels.
-   Secret values are never sent back from the server — only "is it set".
+   [JS:SETTINGS]  —  the Settings page (reads/writes js/settings.js, localStorage)
+   Lets you set the Groq/Gemini key and account labels. Your key is typed into
+   THIS input field and saved ONLY in this browser's localStorage — it is never
+   sent anywhere except directly to Groq/Gemini's own API when you chat. There
+   is no server, so there's nothing to "configure on a dashboard" anymore.
    ============================================================================ */
 (function () {
   const body = document.getElementById("settings-body");
-  let current = null;
 
   function esc(s) { return (s == null ? "" : String(s)).replace(/"/g, "&quot;"); }
 
-  function render(s) {
-    current = s;
-    const ai = s.ai_center || {};
-    const ua = ai.user_answer || {};
-    const intern = ai.internal || {};
-    const tiers = ai.ollama_tiers || {};
-    const models = s.installed_models || [];
-    const datalist = `<datalist id="model-list">${models.map(m => `<option value="${esc(m)}">`).join("")}</datalist>`;
+  function render() {
+    const s = settingsMod.getSettings();
+    const accounts = settingsMod.listAccounts();
 
     const statusLabel = (st) => st === "live" ? "connected" : "not connected";
-    const accountsHtml = (s.accounts || []).map(a => `
+    const accountsHtml = accounts.map(a => `
       <div class="acct-block" data-acct="${esc(a.id)}">
         <div class="acct-head">
           <span class="acct-type">${a.type === "outlook" ? "📧 Outlook" : "✉️ Gmail"}</span>
@@ -1189,36 +1176,18 @@ body {
       </div>`).join("");
 
     body.innerHTML = `
-      ${datalist}
-      <div class="set-section">
-        <h3>Status</h3>
-        <div class="set-row">Ollama: <span class="set-badge ${s.ollama_reachable ? "ok" : "off"}">${s.ollama_reachable ? "online" : "offline"}</span></div>
-        <div class="set-row" style="margin-top:6px;">Gemini key: <span class="set-badge ${s.gemini_key_set ? "ok" : "off"}">${s.gemini_key_set ? "configured" : "not set"}</span></div>
-      </div>
-
       <div class="set-section">
         <h3>AI brains</h3>
         <div class="set-row">
-          <label>Groq API key — main brain, fast + free tier ${s.groq_key_set ? "(leave blank to keep current)" : ""}</label>
-          <input id="set-groq-key" type="password" placeholder="${s.groq_key_set ? "••••••••" : "paste Groq key"}">
+          <label>Groq API key — main brain, fast + free tier ${s.groqApiKey ? "(leave blank to keep current)" : ""}</label>
+          <input id="set-groq-key" type="password" placeholder="${s.groqApiKey ? "••••••••" : "paste Groq key"}">
         </div>
         <div class="set-row">
-          <label>Gemini API key — optional ${s.gemini_key_set ? "(leave blank to keep current)" : ""}</label>
-          <input id="set-gemini-key" type="password" placeholder="${s.gemini_key_set ? "••••••••" : "paste Gemini key"}">
+          <label>Gemini API key — optional fallback ${s.geminiApiKey ? "(leave blank to keep current)" : ""}</label>
+          <input id="set-gemini-key" type="password" placeholder="${s.geminiApiKey ? "••••••••" : "paste Gemini key"}">
         </div>
-        <div class="set-note">Answers: <b>${esc(ua.provider)}</b> · ${esc(ua.model)} &nbsp;|&nbsp; Internal: ${esc(intern.provider)} &nbsp;|&nbsp; Fallback: ${esc(ai.fallback_provider)}. Ask me to change models.</div>
-      </div>
-
-      <div class="set-section">
-        <h3>Ollama (local / free)</h3>
-        <div class="set-row"><label>Ollama host (change for cloud Ollama)</label>
-          <input id="set-ollama-host" value="${esc(ai.ollama_host)}"></div>
-        <div class="set-grid">
-          <div class="set-row"><label>small tier</label><input id="set-tier-small" list="model-list" value="${esc(tiers.small)}"></div>
-          <div class="set-row"><label>medium tier</label><input id="set-tier-medium" list="model-list" value="${esc(tiers.medium)}"></div>
-          <div class="set-row"><label>large tier</label><input id="set-tier-large" list="model-list" value="${esc(tiers.large)}"></div>
-        </div>
-        <div class="set-note">Installed models: ${models.length ? models.map(esc).join(", ") : "none detected"}</div>
+        <div class="set-note">Model: ${esc(s.groqModel)} (Gemini fallback: ${esc(s.geminiModel)}). Ask me to change models.</div>
+        <div class="set-note">Your key is saved only in this browser (localStorage) — never uploaded anywhere.</div>
       </div>
 
       <div class="set-section">
@@ -1237,7 +1206,7 @@ body {
         </div>
       </div>
 
-      <button class="set-save" id="set-save-btn">Save labels & models</button>
+      <button class="set-save" id="set-save-btn">Save</button>
       <span id="set-saved-msg" class="set-note"></span>`;
 
     document.getElementById("set-save-btn").addEventListener("click", save);
@@ -1248,57 +1217,33 @@ body {
       b.addEventListener("click", () => explainConnect()));
   }
 
-  // POST a settings patch, re-render with the fresh result, refresh the status strip.
-  async function postPatch(patch, okMsg) {
-    const msg = document.getElementById("set-saved-msg");
-    if (msg) msg.textContent = "saving…";
-    try {
-      const res = await fetch("/api/settings", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      const fresh = await res.json();
-      render(fresh);
-      const m = document.getElementById("set-saved-msg");
-      if (m) m.textContent = okMsg || "✓ saved";
-      if (window.APEX.refreshStatus) window.APEX.refreshStatus();
-    } catch (e) {
-      const m = document.getElementById("set-saved-msg");
-      if (m) m.textContent = "save failed — backend offline?";
-    }
+  function flash(msg) {
+    render();
+    const m = document.getElementById("set-saved-msg");
+    if (m) m.textContent = msg;
+    if (window.APEX.refreshStatus) window.APEX.refreshStatus();
   }
 
-  // Save labels/purposes + Ollama host/tiers + (optional) Gemini key.
   function save() {
-    const patch = {
-      ai_center: {
-        ollama_host: val("set-ollama-host"),
-        ollama_tiers: { small: val("set-tier-small"), medium: val("set-tier-medium"), large: val("set-tier-large") },
-      },
-      accounts: [...document.querySelectorAll(".acct-block")].map(el => ({
-        id: el.getAttribute("data-acct"),
-        label: el.querySelector(".acct-label").value,
-        purpose: el.querySelector(".acct-purpose").value,
-      })),
-    };
-    const gkey = val("set-gemini-key");
-    if (gkey) patch.gemini_api_key = gkey;
-    const qkey = val("set-groq-key");
-    if (qkey) patch.groq_api_key = qkey;
-    postPatch(patch, "✓ saved");
+    settingsMod.updateSettings({ groqApiKey: val("set-groq-key"), geminiApiKey: val("set-gemini-key") });
+    settingsMod.updateAccountLabels([...document.querySelectorAll(".acct-block")].map(el => ({
+      id: el.getAttribute("data-acct"),
+      label: el.querySelector(".acct-label").value,
+      purpose: el.querySelector(".acct-purpose").value,
+    })));
+    flash("✓ saved");
   }
 
   function addAccount() {
     const address = val("add-address");
     if (!address) { document.getElementById("set-saved-msg").textContent = "enter an email address"; return; }
-    postPatch({ add_account: {
-      type: val("add-type"), address,
-      label: val("add-label") || address, purpose: val("add-purpose"),
-    } }, "✓ account added");
+    settingsMod.addAccount({ type: val("add-type"), address, label: val("add-label") || address, purpose: val("add-purpose") });
+    flash("✓ account added");
   }
 
   function removeAccount(id) {
-    postPatch({ remove_account_id: id }, "✓ account removed");
+    settingsMod.removeAccount(id);
+    flash("✓ account removed");
   }
 
   function explainConnect() {
@@ -1308,17 +1253,8 @@ body {
 
   function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ""; }
 
-  async function loadSettings() {
-    try {
-      const s = await (await fetch("/api/settings")).json();
-      render(s);
-    } catch (e) {
-      body.innerHTML = '<div class="set-note">Settings unavailable — is the backend running?</div>';
-    }
-  }
-
   window.APEX = window.APEX || {};
-  window.APEX.loadSettings = loadSettings;
+  window.APEX.loadSettings = render;
 })();
 </script>
 

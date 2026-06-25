@@ -22,8 +22,9 @@ Thumbs.db
 desktop.ini
 
 # --- Runtime logs (created on demand by the app; keep out of the repo) ---
-core_memory/logs/*.jsonl
-!core_memory/logs/.gitkeep
+# unanchored (**/) so this also covers python_backend_legacy/core_memory/logs/
+**/core_memory/logs/*.jsonl
+!**/core_memory/logs/.gitkeep
 
 # --- Local AI config that may hold a private cloud-Ollama URL/token ---
 # (ai_center.json is committed as a template; if you put private hosts in it, ignore it instead)

@@ -7,56 +7,67 @@
 
 _Last updated: 2026-06-25_
 
+## 🔄 Major change: migrated to a client-side (browser-only) app
+APEX no longer has a backend server. Everything (memory, AI Center, action pipeline) now runs as
+plain JavaScript in the browser, backed by `localStorage`. Why: the user wanted APEX free, always
+reachable, and not dependent on a personal computer staying on — a prior personal project of
+theirs proved a pure client-side app does exactly that (free GitHub Pages hosting), and it was
+confirmed technically viable (Groq + Gemini both allow direct browser calls — verified live via
+CORS preflight tests). The original Python backend is **archived, not deleted**, at
+`python_backend_legacy/` (still runs standalone — see its README) — useful if local Ollama or a
+more mature pipeline is ever needed again.
+
 ## ✅ Working now
 - **UI** — orange/black theme, animated honeycomb, chat / calendar / email / settings views.
-- **Memory** — catalog + resolver + packet builder (loads only relevant memory, never everything).
-- **AI Center** — **Groq** is the primary brain (fast, cloud, free-tier — fixed a Cloudflare
-  403/User-Agent bug that was silently falling back to slow local Ollama). Ollama = local fallback.
-  Gemini = optional alt brain. All keys set via the in-app **Settings** page.
-- **Actions (mock data)** — calendar Q&A, email search, email drafting with a style-learning loop
-  (drafts tune to feedback over time). Accounts are mock/sample until real OAuth is connected.
-- **Settings page** — add/label/remove email accounts, set AI provider keys, pick Ollama models.
-- **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10 (pushed, secrets excluded).
-- **LAN access** — server binds `0.0.0.0`, reachable from other devices on the same WiFi (e.g. the
-  iPad) via `http://<this-PC's-LAN-IP>:8765/index.html`.
-- **Public access (temporary)** — a Cloudflare Tunnel (`cloudflared`, installed via winget) exposes
-  the locally-running backend at a public `*.trycloudflare.com` URL, reachable from anywhere (not
-  just home WiFi). Free, no account. **Requires this PC to stay on and the backend running** — the
-  URL changes every time the tunnel restarts.
-- **Password gate built, not yet turned on** — `backend/server.py` checks the `APEX_ACCESS_PASSWORD`
-  env var via HTTP Basic Auth on *every* route (static + API). If unset (normal local/LAN case),
-  no password required — verified unchanged. If set, verified it correctly blocks/allows. Needed
-  before anything goes on a permanent public URL.
-- **Render deploy files added** (`render.yaml`, `requirements.txt`) — not deployed yet. Render runs
-  the backend on its own servers (no payment needed on the free tier; free tier sleeps after ~15 min
-  idle, ~30-50s to wake on next request) — this is the real fix for "don't want to depend on my PC."
+  Unchanged visually by the migration.
+- **Memory** (`js/memory.js`) — catalog + resolver + packet builder, ported 1:1 from the Python
+  version and verified to produce identical results on the same test prompts.
+- **AI Center** (`js/aiCenter.js`) — **Groq** is the primary brain (called directly from the
+  browser via `fetch()`, no server). **Gemini** is the fallback. No local Ollama (mixed-content
+  blocking on HTTPS pages rules it out for the browser version).
+- **Actions (mock data)** (`js/pipeline.js`, `js/connections.js`) — calendar Q&A, email search,
+  email drafting with a style-learning loop. Verified end-to-end: the DocuSign find-and-draft flow
+  and a draft refine that updates the learned writing style both work against live Groq.
+- **Settings page** — paste a Groq/Gemini key (saved only in this browser's `localStorage`), add/
+  label/remove email accounts. No server, nothing uploaded.
+- **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
+
+## 📦 Archived (not deleted)
+- **`python_backend_legacy/`** — the original Python backend (memory engine, AI Center w/ Groq/
+  Gemini/Ollama routing, action pipeline, mock connectors, Settings server, password gate, Render
+  deploy config). Runs standalone (`cd python_backend_legacy && python -m backend.server`),
+  verified working right after the archive move. Kept for reference and as a fallback — it
+  supports real local Ollama, which the browser version can't reach.
+- The in-progress **Render deployment** (config still in `python_backend_legacy/render.yaml`) is
+  parked, not finished — superseded by the simpler GitHub Pages + client-side approach.
+- The **Cloudflare Tunnel** approach (`cloudflared`, used briefly for testing on the iPad over the
+  internet) is no longer needed — GitHub Pages will serve the same purpose for free, permanently.
 
 ## ⏸️ Paused
 - **Tuya smart strip lights** — direct local control via `tinytuya` (no Pi/hub). User created the
   Tuya IoT cloud project (Smart Home method) but paused before linking the Smart Life app account
-  / pulling device keys. See memory note `lights-integration` for exact resume point.
+  / pulling device keys. See memory note `lights-integration` for exact resume point. (Note: this
+  would need rethinking in the client-side world — `tinytuya` is a Python library; a browser can't
+  run it. Likely candidate for a future small serverless function, or stays in the archived Python
+  backend's domain.)
 
 ## 🔜 Next up (in rough order, not committed)
-1. **Deploy to Render** — create free Render account (GitHub login), connect this repo (Render reads
-   `render.yaml`), set `GROQ_API_KEY` / `GEMINI_API_KEY` / `APEX_ACCESS_PASSWORD` in Render's
-   dashboard (never in git), deploy. Gives a stable always-on URL, no PC required, no payment.
-   **Caveat to remember:** Render's free tier filesystem is ephemeral (resets on
-   restart/redeploy) — fine for now since the Memory Writer is still a non-destructive placeholder,
-   but matters once real memory-writing or persistent drafts are built.
-2. **Real email/calendar OAuth** (Phase C) — Gmail + Google Calendar first (one OAuth covers both),
-   Outlook after. Needs a Google Cloud OAuth client + a dependency decision
-   (`google-api-python-client` etc.).
-3. **Tuya lights** — resume where paused (link app account → pull keys via tinytuya wizard → build
-   the `lights` tool/action).
-4. **Speed/UX polish** — skip the redundant intent-classify call for plain chat, response streaming.
-5. Autonomy/triggers, tools registry/permissions — later phases, not started.
+1. **Enable GitHub Pages** — Settings → Pages → deploy from `main`. Get the real public URL, test
+   from the iPad/phone with zero PC involvement.
+2. **Real email/calendar OAuth, browser-side** — Gmail + Google Calendar via Google Identity
+   Services, Outlook via MSAL.js — directly from the browser, no backend relay. Proven pattern
+   (the user's prior project already does this).
+3. **Tuya lights** — revisit given the client-side architecture (see note above).
+4. Cross-device memory sync (optional, would need something like Supabase), autonomy/triggers,
+   tools registry/permissions — later phases, not started.
 
 ## Notes for future sessions
-- Backend run command: `python -m backend.server` (binds `0.0.0.0:8765` by default; override with
-  `APEX_HOST` / `PORT` env vars). Ollama host must be `127.0.0.1`, not `localhost` (the latter is
-  ~2s slower to resolve via Python's urllib on this Windows machine — fixed in config already).
-- Tests: `python scripts/test_memory.py`, `python scripts/test_ai_center.py`.
-- Secrets live only in `secrets/secrets.json` (git-ignored) or env vars — never commit real keys.
-- GitHub cannot run the backend itself (Pages = static-only; Actions = CI/CD only, not for hosting
-  persistent services) — code lives on GitHub, but *running* it always requires a separate host
-  (tunnel for now, Render next).
+- Run it: any static file server, e.g. `python -m http.server 8765`, then open
+  `http://localhost:8765/index.html`. ES modules need `http(s)://`, not `file://`.
+- No backend, no Python required for the live app. `python_backend_legacy/` is independent and
+  optional — see its own README for how to run/test it.
+- Secrets: there is no secrets file for the live app — keys live in the browser's `localStorage`,
+  entered via Settings. (`secrets/` at the repo root only matters for the archived Python backend.)
+- Both Groq and Gemini confirmed CORS-friendly for direct browser calls (tested via `curl -i -X
+  OPTIONS` with an `Origin` header against their real endpoints) — this is *why* the migration was
+  possible; re-verify if either provider's policy ever seems to change.

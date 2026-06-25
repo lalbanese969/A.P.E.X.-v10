@@ -1,87 +1,97 @@
 # A.P.E.X. Build Plan (Phased)
 
-Build philosophy: **step by step**, clean structure, mocked tools, local JSON first, readable modular
-files, never break the UI, no needless dependencies, secrets isolated.
+Build philosophy: **step by step**, clean structure, mocked tools first, readable modular files,
+never break the UI, no needless dependencies, secrets isolated.
 
-Status legend: ✅ done · 🔜 next · ⬜ later
+Status legend: ✅ done · 🟡 in progress · 🔜 next · ⬜ later
 
 ---
 
-## Phase 0 — Foundation & Docs ✅
-- Repo structure, `CLAUDE.md`, `docs/`, `.gitignore`, `secrets/` template.
-- Data vs. code separation (`core_memory/` vs. `backend/`).
+## History (Phases 0–2b) — built in Python, now archived
 
-## Phase 1 — Memory V1 ✅  *(current)*
-Local JSON memory + efficient read path + non-destructive write path.
-- `core_memory/memory_catalog.json` — table of contents (cards only).
-- `people/` — `person_schema.json` + `example_person_taylor.json`.
-- `projects/` — `project_schema.json` + `example_project_apex.json`.
-- `apex_self/apex_profile.json` — evolving self-profile (0–10 levels, evidence, history).
-- `logs/memory_write_log.jsonl` — proposed writes.
-- `backend/memory/` engine: `paths, schemas, catalog, resolver, packet_builder, writer, profile, demo`.
-- CLI: `python -m backend.memory.demo "<prompt>"`.
-- **Constraints honored:** stdlib only, no AI calls, no embeddings, writer never auto-edits memory,
-  UI untouched.
+APEX's foundation (memory system, AI Center, action pipeline, mock connections, Settings) was
+originally built as a **Python backend** (`backend/server.py` + supporting modules). That work is
+**preserved, not lost** — it's archived at `python_backend_legacy/` (still runs standalone; see its
+README) — and was the direct basis for the JavaScript port described below. Condensed history:
 
-## Phase 2 — Backend Server + AI Wire-up 🟡 *(in progress — memory connected, AI still mocked)*
-Done so far:
-- ✅ Zero-dependency stdlib server (`backend/server.py`) serves the UI + `POST /api/chat`.
-- ✅ Chat pipeline (`backend/pipeline.py`): prompt → resolver → Memory Packet → **mock** response.
-- ✅ UI `[JS:CHAT]` posts to `/api/chat` (with offline fallback) instead of local echo.
-- ✅ Memory Packet (small, section-scoped) is what flows into the response — not all memory.
-- ✅ Resolution logging → `core_memory/logs/memory_resolution_log.jsonl`.
-- ✅ Writer still runs each turn (log-only, non-destructive).
+- **Phase 0 — Foundation & Docs**: repo structure, `CLAUDE.md`, `docs/`, data/code separation.
+- **Phase 1 — Memory V1**: local JSON memory store + efficient resolver/packet-builder read path +
+  non-destructive writer placeholder.
+- **Phase 2 — Backend + mock AI wire-up**: a zero-dependency stdlib server, chat pipeline, Memory
+  Packet flowing into a (then-mocked) response.
+- **Phase 2b — AI Center + Connections**: real Gemini/Ollama routing with a cost budget, mock
+  email/calendar connectors (incl. a DocuSign email), intent-routed actions (calendar query, email
+  search/draft/refine), a writing-style learning loop, a Settings page, and a password gate +
+  Render deploy config for self-hosting.
 
-Phase 2 completed by the AI Center step below.
+What ended Phase 2b: the user wanted APEX reachable **without depending on a personal computer
+staying on**, for **free**. A Render deploy was started but is more friction than necessary; a
+prior personal project of the user's proved a **pure client-side** (browser-only, GitHub-Pages-
+hosted) app was a simpler fit — confirmed technically viable by testing that both Groq and Gemini
+allow direct browser calls (CORS).
 
-## Phase 2b — AI Center + Connections (Ollama + Gemini, email/calendar mock-first) ✅
-The mock brain is replaced by a real, cost-aware AI Center, and email/calendar "hands" exist (mock data).
-- ✅ **AI Center** (`backend/ai/`): `providers/{ollama,gemini}.py` (stdlib HTTP, no deps),
-  `center.py` routes tasks — **Gemini** for the user-facing answer (budget 1/turn, hard cap from
-  config), **Ollama** for all internal work, auto-falling-back to an installed model. Usage logged to
-  `core_memory/logs/ai_usage_log.jsonl`.
-- ✅ **Cloud-ready Ollama**: host + optional auth header in `config/ai_center.json` → local↔cloud is a config change.
-- ✅ **Connections** (`backend/connections/`): labeled account registry (`config/accounts.json`),
-  email + calendar connectors with **mock** implementations (incl. a DocuSign email).
-- ✅ **Pipeline**: intent router (heuristic-first, Ollama tiebreak) → actions (calendar query, email
-  search, **email draft**, **email refine**) → real brain answer. Calendar events injected into context.
-- ✅ **Writing-style learning loop**: draft feedback → Ollama extracts a preference → appended to
-  `core_memory/apex_self/writing_style.json` (seeded friendly+professional) → future drafts use it.
-- ✅ **UI**: center view switcher (chat / **calendar view** / **email view**), in-chat editable draft
-  card, connection **status strip** (shows configured ✅/❌, never secret values).
-- ✅ Endpoints: `/api/chat`, `/api/calendar`, `/api/email`, `/api/accounts`, `/api/status`, `/api/email/draft`.
+---
 
-Still pending (separate gated steps):
-- ⬜ **Phase C** — real OAuth connectors (Gmail/Outlook/Google Calendar) + the dependency decision.
-- ⬜ Autonomy (proactive email noticing, auto-drafts, follow-ups, reminders) — Phase D.
-- ⬜ Cloud deploy — Phase E.
+## Phase 3 — Migrate to client-side (browser-only) ✅
+- ✅ Archived the Python backend to `python_backend_legacy/` (`git mv`, history preserved, verified
+  still runs standalone).
+- ✅ Ported the engine to plain ES modules in `js/`: `storage.js` (localStorage), `seedData.js`
+  (demo data), `memory.js` (catalog/resolver/packet/profile/writing-style/writer-placeholder),
+  `aiCenter.js` (Groq primary + Gemini fallback, called directly via `fetch()`), `connections.js`
+  (mock email/calendar + drafts), `settings.js` (keys + labeled accounts), `pipeline.js`
+  (heuristic intent → actions → AI Center → response).
+- ✅ Rewired `index.html`'s chat/calendar/email/settings/status UI to call these modules directly —
+  no more `fetch("/api/...")` anywhere.
+- ✅ Verified: live Groq calls from the browser runtime, the four core scenarios (Taylor's
+  birthday, calendar "today", DocuSign find-and-draft, draft refine + style learning) all produce
+  correct results matching the original Python version.
+- ✅ Dropped local Ollama (mixed-content blocking on HTTPS pages — see Architecture doc) and the
+  AI-tiebreak step in intent classification (heuristic alone is reliable and one fewer network call).
+- ✅ Docs updated to describe this as the current architecture.
 
-## Phase 3 — Self-Profile Adaptation + Reflection AI ⬜
-- Reflection pass proposes profile updates: append evidence, nudge confidence, version in
-  `update_history`. Controlled and logged — never free rewrite.
-- Begin promoting reviewed `memory_write_log.jsonl` proposals into real records (with approval).
+**Zero dependencies, no build step** — same philosophy as the Python version, just applied to the browser.
 
-## Phase 4 — Actions System V1 ⬜
-- Action-job model + Tool Router + **mocked** tools (calendar/email/files as fakes).
-- "Working on that → job created → Done" flow, with a job log.
+## Phase 4 — Go live on GitHub Pages 🔜
+- Enable GitHub Pages on the repo (Settings → Pages → deploy from `main`).
+- Open the real public URL, add a Groq key in Settings, confirm it works from a phone/tablet with
+  no PC involved.
+- No password gate needed (see Architecture doc's Security/Control section) — but document clearly
+  that the page is public and an empty UI until a visitor's own browser has its own key.
 
-## Phase 5 — Tools Registry + Permissions ⬜
+## Phase 5 — Real email/calendar OAuth (browser-side) ⬜
+- Gmail + Google Calendar (one OAuth covers both) via **Google Identity Services**, directly from
+  the browser — the same pattern already proven by the user's prior project. Outlook via **MSAL.js**
+  similarly. No backend relay needed (this is actually *simpler* than the server-side OAuth flow
+  that would've been needed in the Python version).
+- Account `status` flips `mock → live` per account once connected.
+
+## Phase 6 — Self-Profile Adaptation + Reflection ⬜
+- A controlled, logged, versioned reflection pass over the self-profile (append evidence, nudge
+  confidence) — ported from the same idea in the Python version, now client-side.
+
+## Phase 7 — Tools Registry + Permissions ⬜
 - Registry describing each tool's capabilities, risk level, and approval requirement.
-- Approval system for high-risk actions.
+- Approval system for high-risk actions (relevant once real send/write actions exist).
 
-## Phase 6 — Autonomy / Triggers ⬜
+## Phase 8 — Autonomy / Triggers ⬜
 - Recurring + event triggers with limits (max/day, max/hour, quiet hours), logs, permission rules.
+  Browser-only triggers are inherently limited to "while a tab is open" unless paired with a
+  service worker — revisit then.
 
-## Phase 7 — Real Integrations ⬜
-- Email, calendar, Raspberry Pi, smart lights, 3D printer — one at a time. OAuth/tokens in `secrets/`.
+## Phase 9 — Cross-device sync (optional) ⬜
+- Today, memory/settings live in one browser's `localStorage` only. If syncing across devices
+  becomes important, add something like Supabase (the same piece the user's prior project used) —
+  a deliberate, separate decision, not assumed.
 
-## Phase 8 — Hardening + Self-Improvement ⬜
-- Prompt optimizer; upgrade resolver to real semantic search (embeddings); broader logging/observability.
+## Phase 10 — Hardening + Self-Improvement ⬜
+- Prompt optimizer; upgrade the resolver to real semantic search (embeddings); broader
+  logging/observability.
 
 ---
 
-## Open Decisions (carried forward)
-- **Backend framework** for Phase 2: FastAPI (Python) vs Node/Express.
-- **AI provider** for the main brain: Anthropic (Claude) vs OpenAI (GPT) vs switchable.
+## Out of scope / explicitly deferred
+- Real local Ollama in the live app (archived backend supports it; browser version doesn't).
+- The Render deployment (config still exists in `python_backend_legacy/render.yaml` if ever needed).
+- Cross-device sync, autonomy, tool permissions/approval — each a deliberate later phase, not assumed.
 
-These do not block Memory V1 and are resolved at the start of Phase 2.
+See `STATUS.md` for the live, quick-glance tracker of what's currently working/paused/next.

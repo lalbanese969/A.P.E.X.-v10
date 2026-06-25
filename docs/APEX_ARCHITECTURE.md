@@ -7,93 +7,92 @@ memory, actions, tools, autonomy, security, and self-improvement, built **step b
 
 ---
 
+## Runs entirely client-side — no backend server
+
+APEX started as a Python backend + web UI. It was **migrated to pure client-side JavaScript**
+(see `js/`) so it could be hosted free (GitHub Pages), not depend on a personal computer staying
+on, and avoid a sleep-prone/paid server. Everything — memory, the AI Center, the action pipeline —
+now runs as plain ES modules in the browser, backed by `localStorage`. There is no server in the
+live app.
+
+This was viable because both **Groq** and **Gemini** were confirmed, via a live CORS preflight
+test against their real APIs, to allow direct browser-origin requests — so the browser can call
+them straight, no relay server needed.
+
+The original Python backend is **archived, not deleted**, at `python_backend_legacy/` (its own
+README explains why and how to run it standalone). It still supports things the browser version
+can't — notably real **local Ollama** as a model (a page served over HTTPS can't call
+`http://localhost:11434`; browsers block that as mixed content).
+
+---
+
 ## User Experience Flow (target end state)
 
 1. User sends a prompt through the UI (`index.html`).
 2. A.P.E.X. responds naturally.
-3. If an action is needed, A.P.E.X. acknowledges quickly ("Working on that").
-4. The backend creates an **action job**.
-5. A **Tool Router** sends the job to the correct tool (calendar, email, files, API, Raspberry Pi,
-   lights, 3D printer, …).
-6. The tool runs the job.
-7. A.P.E.X. follows up ("Done, I scheduled that for you").
-8. High-risk actions go through an **approval system** (later phase).
+3. If an action is needed, A.P.E.X. acknowledges quickly ("Working on that"), runs the action
+   (calendar/email/etc.), and follows up ("Done, I scheduled that for you").
+4. High-risk actions go through an **approval system** (later phase).
 
 ---
 
 ## The 9 Concepts
 
 ### 1. Main A.P.E.X. AI
-The single personality/voice. From the user's view they talk to one assistant. It receives a small
-**Memory Packet** (not the whole memory store) plus the self-profile guidance, and decides whether
-an action is needed.
+The single personality/voice. It receives a small **Memory Packet** (not the whole memory store)
+plus self-profile guidance, and decides whether an action is needed. Implemented as
+`js/pipeline.js` calling `js/aiCenter.js`.
 
-### 2. Memory Resolver  ✅ V1 implemented
-Reads memory **efficiently**. It does NOT load all memory into the prompt. Instead:
-`memory_catalog.json` (table of contents) → score relevant cards → suggest which sections to load.
-V1 uses alias/tag/name/summary matching as a stand-in for future semantic search (stable interface
-so embeddings can be added later).
+### 2. Memory Resolver  ✅ implemented
+Reads memory **efficiently** — never loads everything into the prompt. A catalog (table of
+contents) is scored against the prompt; only matching sections are loaded. `js/memory.js` —
+alias/tag/name/summary matching, a stand-in for future semantic search (stable interface so
+embeddings could be added later).
 
-### 3. Memory Writer AI  ✅ V1 placeholder
-After an interaction, decides whether anything should be saved (people, birthdays, relationships,
-preferences, gift ideas, projects, notes). **V1 is a non-destructive placeholder**: it logs
-*proposed* writes to `core_memory/logs/memory_write_log.jsonl` and never edits memory automatically.
-Real AI extraction + approval come later.
+### 3. Memory Writer AI  ✅ placeholder
+After an interaction, decides whether anything should be saved (people, birthdays, preferences,
+gift ideas, projects, notes). **Still a non-destructive placeholder**: `js/memory.js:reviewInteraction`
+logs *proposed* writes to `localStorage` (`apex.logs.memoryWrite`) and never edits memory
+automatically. Real AI extraction + approval come later.
 
-### 4. A.P.E.X. Self-Profile  ✅ V1 implemented
-A separate, evolving profile of **how A.P.E.X. should behave**: tone, humor (0–10), directness
-(0–10), detail level, pacing, communication style, liked/disliked response patterns, evidence,
-confidence scores, and update history. It **grows by adding evidence**, never by blind overwrite
-(`backend/memory/profile.py:add_evidence`).
+### 4. A.P.E.X. Self-Profile  ✅ implemented
+A separate, evolving profile of **how A.P.E.X. should behave** (tone, etc.), stored under
+`apex.memory.profile`. Grows by adding evidence, never blind overwrite.
 
-### 5. Reflection / Prompt Optimizer  — later
-After interactions, suggests controlled, logged, **versioned** updates to the self-profile and later
-to prompts. Never freely rewrites the system.
+### 5. Reflection / Prompt Optimizer — later
+Controlled, versioned updates to the self-profile/prompts. Never freely rewrites the system.
 
-### 6. Actions System  — later
-Real assistant jobs: understand request → acknowledge → create action job → Tool Router → execute →
-report back.
+### 6. Actions System  🟡 partial
+Calendar Q&A, email search/draft/refine are real (against mock data). The full
+acknowledge → job → tool → report-back flow for arbitrary actions is a later phase.
 
 ### 7. Tools Layer  — later
-A.P.E.X.'s "hands": email, calendar, files, browser/search, APIs, Raspberry Pi, lights, 3D printer.
-A **tool registry** describes each tool's capabilities, permissions, risk level, and whether
-approval is required.
+A.P.E.X.'s "hands": email, calendar (mock now), files, browser/search, smart home, etc. A tool
+registry describing capabilities/risk/approval requirements is a later phase.
 
 ### 8. Autonomy / Triggers  — later
-Recurring and event triggers that run backend tasks on a schedule/event, with hard limits (max
-triggers/day, max runs/hour, quiet hours) and logs.
+Recurring/event triggers with hard limits (max/day, quiet hours) and logs.
 
-### 9. Security / Control  — ongoing
-Secrets, API keys, OAuth tokens, and passwords **never** live in memory files or code — only in
-`secrets/` (git-ignored). Tools have permission levels; high-risk actions require approval;
-autonomy has limits and logs.
+### 9. Security / Control  — ongoing, model changed by the migration
+There's no server, so there's no server-side secret store. API keys are typed into the Settings UI
+and live **only in the user's own browser `localStorage`** — never written to a committed file,
+never sent anywhere except directly to the AI provider's own API. (The archived Python backend's
+model — secrets in a git-ignored file — still applies if you run it standalone.)
 
 ---
 
-## Memory V1 — What's Implemented
+## Memory — What's Implemented (`js/memory.js`)
 
-### Data store — `core_memory/` (local JSON, hand-editable)
-- `memory_catalog.json` — lightweight **table of contents**. Cards only (id, type, display_name,
-  aliases, relationship_to_user, summary_card, memory_file, available_sections, tags, importance,
-  last_updated). No full memory.
-- `people/person_schema.json` + `people/example_person_taylor.json` — person records.
-- `projects/project_schema.json` + `projects/example_project_apex.json` — project records.
-- `apex_self/apex_profile.json` — the self-profile.
-- `logs/memory_write_log.jsonl` — append-only proposed writes.
+### Storage (localStorage, namespaced under `apex.`)
+- `apex.memory.catalog` — lightweight **table of contents**. Cards only (id, type, display_name,
+  aliases, relationship_to_user, summary_card, available_sections, tags, importance). No full memory.
+- `apex.memory.people.<id>` / `apex.memory.projects.<id>` — full records.
+- `apex.memory.profile` — the self-profile. `apex.memory.writingStyle` — learned draft preferences.
+- `apex.logs.memoryWrite` / `apex.logs.memoryResolution` — append-only logs (arrays in localStorage).
+- Seed/demo data (Taylor, the APEX project record) ships in `js/seedData.js` and is written once,
+  the first time the app runs with nothing stored yet.
 
-### Engine — `backend/memory/` (Python standard library only)
-| Module | Responsibility |
-|---|---|
-| `paths.py` | Single source of truth for file locations. |
-| `schemas.py` | Record templates, validation, `compute_age()`. |
-| `catalog.py` | Load/scan the catalog; open a record a card points to. |
-| `resolver.py` | Score catalog cards vs. the prompt; suggest sections to load. |
-| `packet_builder.py` | Load only suggested sections → compact **Memory Packet**. |
-| `writer.py` | Non-destructive writer placeholder (logs proposals). |
-| `profile.py` | Safe, append-only self-profile updates. |
-| `demo.py` | CLI tester. |
-
-### The Memory Packet (what the main AI receives)
+### The Memory Packet (what the AI receives)
 ```json
 {
   "memory_needed": true,
@@ -113,118 +112,67 @@ autonomy has limits and logs.
 
 ### Read path
 ```
-prompt ─▶ resolver.resolve() ─▶ packet_builder.build_packet() ─▶ Memory Packet ─▶ main AI
-            (scan catalog cards)   (open matched files,
-                                    load only needed sections)
+prompt → memory.resolve() → memory.buildPacket() → Memory Packet → pipeline → AI Center
+           (scan catalog cards)   (load only needed sections)
 ```
 
-### Write path (V1)
+### Write path
 ```
-interaction ─▶ writer.review_interaction() ─▶ append PROPOSED write ─▶ core_memory/logs/memory_write_log.jsonl
-                                              (never edits memory records)
-```
-
----
-
-## Memory V1 is now CONNECTED to the chat flow
-
-As of this step, memory is wired into the live chat pipeline (the AI itself is still
-mocked — no provider connected yet).
-
-### Runtime flow
-```
-UI (index.html) ──POST /api/chat──▶ backend/server.py ──▶ backend/pipeline.handle_prompt()
-                                                              │
-                                                              ├─ resolver.resolve()         (relevant cards)
-                                                              ├─ packet_builder.build_packet()  (small packet)
-                                                              ├─ mock_apex_response(packet, profile)
-                                                              ├─ writer.review_interaction()    (log-only)
-                                                              └─ log to memory_resolution_log.jsonl
-                                                              ▼
-UI shows apex_response  ◀──────────  { user_prompt, memory_packet, apex_response }
-```
-
-### Key points
-- **The main AI receives Memory Packets, not all memory.** Only the sections relevant
-  to the prompt are loaded; the whole store is never injected.
-- **Reading and writing are separate systems.** Reading happens in the pipeline
-  (`resolver` + `packet_builder`). Writing is handled by `writer.py` and is still a
-  **non-destructive placeholder** — it logs *proposed* writes and never edits memory.
-- **The response is mocked.** `pipeline.mock_apex_response()` stitches the packet into a
-  readable sentence to prove the pipeline. Replace it with a real model call in Phase 2;
-  callers don't change.
-- **No new dependencies.** `backend/server.py` uses only the Python standard library
-  (`http.server`). It serves the UI *and* the `/api/chat` route. A framework can replace
-  it later if needed — the logic lives in `pipeline.py`, not the server.
-
-### New files this step
-| File | Role |
-|---|---|
-| `backend/pipeline.py` | `handle_prompt()` — memory → mock response → logging. |
-| `backend/server.py` | Zero-dependency server: serves UI + `POST /api/chat`. |
-| `scripts/test_memory.py` | Verifies structure/JSON and runs the test prompts. |
-| `core_memory/logs/memory_resolution_log.jsonl` | One line per resolution (considered/loaded/sections/size). |
-
-### Endpoint contract
-`POST /api/chat`  body `{ "prompt": "...", "prior_draft": {...}? }`  →
-```json
-{ "user_prompt": "...", "memory_packet": { ... }, "apex_response": "...",
-  "intent": "...", "ai_meta": {"provider": "...", "model": "..."},
-  "draft": {...}?, "calendar": [...]?, "email_matches": [...]? }
+interaction → memory.reviewInteraction() → append PROPOSED write → apex.logs.memoryWrite
+                                           (never edits memory records)
 ```
 
 ---
 
-## AI Center + Connections (Ollama + Gemini, email/calendar)
+## AI Center + Connections (`js/aiCenter.js`, `js/connections.js`)
 
-The mock brain is replaced by a real, cost-aware **AI Center**, and A.P.E.X. has the start of
-"hands" (email + calendar), built mock-first.
+### AI Center
+- **Groq** = primary brain (fast, generous free tier), called directly from the browser via
+  `fetch()`. Used for both the user-facing answer and internal tasks (style learning).
+- **Gemini** = fallback if Groq has no key or fails. Also confirmed CORS-friendly.
+- **No local Ollama** in the browser version (mixed-content blocking) — see
+  `python_backend_legacy/` if you need that.
+- Every call is logged to `apex.logs.aiUsage` (task, provider, model, ok/error).
+- Keys: typed into Settings, stored only in `apex.settings` (`localStorage`). Never committed,
+  never sent anywhere but directly to the provider's own API.
 
-### AI Center — `backend/ai/`
-- **Gemini** = the paid, user-facing brain. Used **sparingly**: a per-turn budget guard caps Gemini
-  calls (default 1). Over budget / no key / offline → falls back to local Ollama.
-- **Ollama** = local/free, does all internal work (intent classify, style extraction), routed to a
-  model tier (small/medium/large). If a tier's model isn't installed, the Center auto-falls-back to an
-  installed one.
-- **Cloud-ready**: Ollama host + optional auth header live in `config/ai_center.json`, so pointing at
-  a remote/cloud Ollama is a config change, not code.
-- Every call is logged to `core_memory/logs/ai_usage_log.jsonl` (task, provider, model, tokens, ms).
-- Secrets: Gemini key in `secrets/secrets.json` (`ai_providers.gemini_api_key`). No memory/connector
-  code reads secrets.
+### Connections (mock-first)
+- `apex.connections.accounts` — labeled accounts (Gmail/Outlook) + calendars. Add/remove/label
+  from the Settings UI.
+- `apex.connections.emailMessages.<accountId>` / `apex.connections.calendarEvents` — mock data
+  (incl. a DocuSign email, and calendar events generated relative to "today"). Real Gmail/Outlook/
+  Google Calendar OAuth — **directly from the browser**, the same pattern proven by an earlier
+  personal project — is a deliberate later step (see `docs/BUILD_PLAN.md`).
+- `apex.connections.drafts` — saved drafts. **Nothing is ever sent.**
 
-### Connections — `backend/connections/` (mock-first)
-- `config/accounts.json` — labeled accounts (multiple Gmail/Outlook, each with label/purpose) + calendars.
-- `email/` + `calendar/` — connector interfaces with **mock** implementations now (incl. a DocuSign
-  email and today-relative events). Real OAuth (Gmail/Outlook/Google Calendar) is a later, gated step
-  that slots in behind the same interfaces.
-
-### Pipeline flow (per prompt)
+### Pipeline flow (`js/pipeline.js`, per prompt)
 ```
 prompt → memory packet
-       → INTENT (heuristic-first; Ollama tiebreak for ambiguous "chat")
+       → INTENT (heuristic only — no AI tiebreak; simplified since dropping Ollama)
        → ACTION: calendar_query | email_search | email_draft | email_refine | chat
        → CONTEXT (memory + profile + writing style + calendar/email results)
-       → ANSWER via AI Center (Gemini budgeted, Ollama fallback)
-       → writer (memory, log-only) + style learning (Ollama) + logs
+       → ANSWER via AI Center (Groq, Gemini fallback)
+       → memory writer (log-only) + style learning (Groq) + usage/resolution logs
 ```
 
 ### Email drafting + style learning
-- `email_draft`: finds a reference email, the brain writes the body, a structured draft (to/subject/
-  body) is returned and shown in the UI. **Nothing is sent.**
-- `email_refine`: user feedback → Ollama distills a lasting **writing preference** → appended to
-  `core_memory/apex_self/writing_style.json` → re-draft applies it. Drafts tune to the user over time.
+- `email_draft`: finds a reference email, the brain writes the body, a structured draft (to/
+  subject/body) is shown in the UI for review/edit.
+- `email_refine`: feedback on a draft → the brain distills a lasting **writing preference** →
+  appended to `apex.memory.writingStyle` → re-draft applies it. Drafts tune to the user over time.
 
 ### Reading vs writing
 Still separate: memory **reading** (resolver+packet) feeds the prompt; memory **writing** stays a
-non-destructive placeholder (logs proposals). The writing-**style** profile is its own append-only store.
+non-destructive placeholder. The writing-**style** profile is its own append-only store.
 
 ---
 
 ## Constraints (all phases)
 - Don't break the UI (`index.html`).
-- No dependencies without justification (Memory V1 = stdlib only).
-- Never store secrets in memory or code.
+- Zero dependencies, no build step — plain ES modules.
+- Never store secrets in a committed file. Keys live only in the user's browser.
 - Mock tools first; real integrations one at a time, later.
 - Explain plans before major changes.
 
-See `BUILD_PLAN.md` for the phased roadmap and current status.
+See `BUILD_PLAN.md` for the phased roadmap and current status, and `STATUS.md` for the live
+quick-glance tracker.

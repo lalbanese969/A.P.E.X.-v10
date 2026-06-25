@@ -1,55 +1,57 @@
 # A.P.E.X. v10
 
 **A.P.E.X. — Adaptive Personal Executive Xpert.** A custom personal AI assistant: one assistant to
-the user, with modular backend systems for memory, a multi-model AI brain, and connections
-(email/calendar) that grow step by step.
+the user, with memory, a multi-provider AI brain, and connections (email/calendar) that grow step
+by step.
 
-> Status: early build. Memory + AI brain (Ollama/Gemini) + email/calendar **mock** connectors + a
-> web UI are working locally. Real OAuth connections, autonomy, and cloud hosting are planned. See
-> [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md).
+> Status: runs **entirely in the browser** — no backend server. Memory, the AI Center, and the
+> action pipeline all execute as client-side JavaScript, backed by `localStorage`. See
+> [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) and [`STATUS.md`](STATUS.md).
 
 ## What works today
 - **Web UI** (`index.html`) — orange/black theme, animated honeycomb background, chat + calendar +
   email + settings views.
-- **Memory** — a catalog/resolver/packet system that loads only the *relevant* memory per prompt
-  (never dumps everything into the model).
-- **AI Center** — routes work between **Gemini** (paid, user-facing answers, used sparingly) and
-  **Ollama** (local/free, internal tasks), with auto-fallback.
-- **Actions (mock-first)** — calendar Q&A, email search, and email **drafting** with a writing-style
-  learning loop. Data is sample/mock until real accounts are connected.
-- **Settings page** — set the Gemini key, choose Ollama models/host, add & label email accounts.
+- **Memory** (`js/memory.js`) — a catalog/resolver/packet system that loads only the *relevant*
+  memory per prompt (never dumps everything into the model).
+- **AI Center** (`js/aiCenter.js`) — calls **Groq** (primary, fast, free-tier) and **Gemini**
+  (fallback) directly from the browser. Both confirmed CORS-friendly for direct browser calls.
+- **Actions (mock-first)** (`js/pipeline.js`, `js/connections.js`) — calendar Q&A, email search, and
+  email **drafting** with a writing-style learning loop. Data is sample/mock until real accounts are
+  connected.
+- **Settings page** — paste your Groq/Gemini key, add & label email accounts. Everything is saved
+  only in **this browser's `localStorage`** — no server, nothing uploaded anywhere.
 
 ## Requirements
-- **Python 3.13+** (standard library only — no pip dependencies yet).
-- Optional brains: **[Ollama](https://ollama.com)** running locally (`ollama pull llama3.1:8b`)
-  and/or a **Gemini API key**. Without either, the UI still loads with an offline placeholder.
+Just a browser. No Python, no Node, no build step, no install.
 
 ## Run it
+Any static file server works (or just open `index.html` directly — ES modules need `http(s)://`,
+not `file://`, so a tiny server is easiest):
 ```bash
-python -m backend.server
+python -m http.server 8765
 # then open http://localhost:8765/index.html
 ```
+Or once pushed to GitHub: enable **GitHub Pages** (Settings → Pages → deploy from `main`) for a
+free, permanent public URL — no server to keep running.
 
-## Tests
-```bash
-python scripts/test_memory.py        # memory structure + pipeline
-python scripts/test_ai_center.py     # AI routing + Gemini budget
-```
+First time in Settings, paste a **Groq API key** (free at console.groq.com) so APEX has a brain.
 
 ## Layout
 ```
-index.html        # the web UI
-backend/          # the brain: memory/, ai/, connections/, pipeline.py, server.py, settings.py
-core_memory/      # local JSON memory store (example data) + runtime logs
-config/           # ai_center.json, accounts.json (non-secret config)
-secrets/          # git-ignored; API keys/tokens go in secrets.json (see secrets.example.json)
-docs/             # APEX_ARCHITECTURE.md, BUILD_PLAN.md
+index.html             # the web UI
+js/                     # the brain: storage, memory, aiCenter, pipeline, connections, settings
+secrets/                # git-ignored; only relevant if you resurrect the legacy Python backend
+docs/                   # APEX_ARCHITECTURE.md, BUILD_PLAN.md
+python_backend_legacy/  # the original Python backend (archived, not deleted) — see its README.md
 ```
 
-## Configuration & secrets
-- Non-secret config: `config/ai_center.json`, `config/accounts.json`.
-- **Secrets** (Gemini key, future OAuth tokens) live only in `secrets/secrets.json`, which is
-  **git-ignored**. Copy `secrets/secrets.example.json` to get started. Never commit real secrets.
+## Architecture note
+APEX was originally a Python backend + web UI. It was migrated to a pure client-side app so it
+could be hosted free (GitHub Pages), not depend on a personal computer staying on, and avoid a
+sleep-prone/paid server. The Python version still works standalone — see
+[`python_backend_legacy/README.md`](python_backend_legacy/README.md) — and is kept for reference
+(it supports real local Ollama, which the browser version can't reach due to mixed-content
+blocking).
 
 See [`CLAUDE.md`](CLAUDE.md) and [`docs/APEX_ARCHITECTURE.md`](docs/APEX_ARCHITECTURE.md) for the
 full design.
