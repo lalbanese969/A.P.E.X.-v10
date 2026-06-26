@@ -394,6 +394,9 @@ body {
   display: none;            /* hidden until [JS:VIEWS] shows it */
   flex-direction: column;
   gap: 12px;
+  /* dark backdrop so the honeycomb doesn't bleed through these text-dense pages
+     (the chat view is NOT a .center-view, so it keeps the full honeycomb) */
+  background: rgba(9, 9, 11, 0.92);
 }
 .center-view .view-title {
   font-size: 12px;
@@ -514,6 +517,83 @@ body {
 .st-dot.ok  { background: #44d07a; box-shadow: 0 0 6px #44d07a; }
 .st-dot.off { background: #d04444; }
 
+/* ============================================================================
+   [STYLE:CALENDAR-VIEW]  —  Google-Calendar-style month grid
+   ============================================================================ */
+#calendar-view { padding: 18px 22px; gap: 0; }
+.cal-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.cal-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; color: var(--color-text); }
+.cal-nav-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-soft);
+  background: transparent; color: var(--color-text-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; line-height: 1;
+}
+.cal-nav-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--color-text); }
+.cal-today-btn {
+  margin-left: auto; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line);
+  background: transparent; color: var(--color-orange); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.cal-today-btn:hover { background: rgba(255, 122, 0, 0.12); }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-weekdays div {
+  font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--color-text-dim); padding: 6px 8px;
+}
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr;
+  border-left: 1px solid var(--line-soft); border-top: 1px solid var(--line-soft);
+  border-radius: 10px; overflow: hidden; flex: 1; min-height: 0;
+}
+.cal-cell {
+  border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+  padding: 5px 6px; min-height: 80px; display: flex; flex-direction: column; gap: 3px; overflow: hidden;
+}
+.cal-cell.dim { background: rgba(255, 255, 255, 0.012); }
+.cal-cell .daynum { font-size: 12px; color: var(--color-text-dim); line-height: 1.6; align-self: flex-start; }
+.cal-cell.dim .daynum { opacity: 0.4; }
+.cal-cell.today .daynum {
+  background: var(--color-orange); color: #160b00; font-weight: 700;
+  width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+}
+.cal-event {
+  font-size: 11px; line-height: 1.35; color: #fff; padding: 2px 6px; border-radius: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cal-more { font-size: 10px; color: var(--color-text-dim); padding-left: 4px; }
+
+/* ============================================================================
+   [STYLE:LOGS-VIEW]  —  backend-call logs + scheduled timers (mock)
+   ============================================================================ */
+.logs-section-title { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-text-dim); margin: 14px 0 8px; }
+.logs-section-title:first-child { margin-top: 0; }
+.logs-note { font-size: 11px; color: var(--color-text-dim); margin-bottom: 10px; }
+.log-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(255, 255, 255, 0.02); margin-bottom: 7px; }
+.log-row .log-time { font-size: 11px; color: var(--color-text-dim); white-space: nowrap; min-width: 96px; padding-top: 2px; }
+.log-row .log-body { flex: 1; min-width: 0; }
+.log-row .log-action { font-size: 13px; color: var(--color-text); font-weight: 600; }
+.log-row .log-detail { font-size: 12px; color: var(--color-text-dim); margin-top: 2px; }
+.log-meta { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.log-src { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: var(--color-text-dim); }
+.log-status { font-size: 10px; padding: 2px 7px; border-radius: 999px; }
+.log-status.ok { background: rgba(68, 208, 122, 0.15); color: #5cd98a; }
+.log-status.skipped { background: rgba(246, 191, 38, 0.15); color: #f6bf26; }
+.log-status.error { background: rgba(208, 68, 68, 0.18); color: #ff7a7a; }
+.timer-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(255, 255, 255, 0.02); margin-bottom: 7px; }
+.timer-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
+.timer-sched { font-size: 11px; color: var(--color-text-dim); margin-top: 2px; }
+.timer-toggle { margin-left: auto; font-size: 10px; padding: 3px 10px; border-radius: 999px; }
+.timer-toggle.on { background: rgba(68, 208, 122, 0.15); color: #5cd98a; }
+.timer-toggle.off { background: rgba(255, 255, 255, 0.06); color: var(--color-text-dim); }
+
+/* ============================================================================
+   [STYLE:COLOR-CATEGORIES]  —  Google-color -> category rows in Settings
+   ============================================================================ */
+.colorcat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.colorcat-swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
+.colorcat-name { font-size: 12px; width: 76px; flex-shrink: 0; color: var(--color-text); }
+.colorcat-row .cat-input { flex: 1; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--line-soft); background: rgba(15, 15, 17, 0.9); color: var(--color-text); font-size: 12px; outline: none; }
+.colorcat-row .def-pick { font-size: 10px; color: var(--color-text-dim); display: flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0; }
+
 /* --- scrollbar styling (orange-tinted) --- */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -605,10 +685,22 @@ body {
       </button>
     </div>
 
-    <!-- ===== CALENDAR VIEW (hidden until you click Calendar) ===== -->
+    <!-- ===== CALENDAR VIEW — Google-style month grid (hidden until you click Calendar) ===== -->
     <div id="calendar-view" class="center-view" hidden>
-      <div class="view-title">Calendar — Upcoming</div>
-      <div id="calendar-list"><div class="ev-loc">Loading…</div></div>
+      <div class="cal-toolbar">
+        <button class="cal-nav-btn" id="cal-prev" aria-label="Previous month">‹</button>
+        <button class="cal-nav-btn" id="cal-next" aria-label="Next month">›</button>
+        <div class="cal-title" id="cal-title">…</div>
+        <button class="cal-today-btn" id="cal-today">Today</button>
+      </div>
+      <div class="cal-weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+
+    <!-- ===== LOGS VIEW — backend/automation log (hidden until you click Logs) ===== -->
+    <div id="logs-view" class="center-view" hidden>
+      <div class="view-title">Logs &amp; Automation</div>
+      <div id="logs-body"></div>
     </div>
 
     <!-- ===== EMAIL VIEW (hidden until you click Email) ===== -->
@@ -1003,6 +1095,8 @@ import * as settingsMod from "./js/settings.js";
       const data = await pipelineMod.handlePrompt(text, { priorDraft: lastDraft });
       thinking.textContent = data.apex_response;
       if (data.draft) renderDraft(data.draft);
+      // if APEX just added a calendar event, refresh the calendar view so it shows up
+      if (data.event && window.APEX.loadCalendar) window.APEX.loadCalendar();
       // Inspect what memory/intent/model was used in DevTools -> Console.
       console.log("[A.P.E.X.]", { intent: data.intent, ai: data.ai_meta, memory: data.memory_packet });
     } catch (err) {
@@ -1034,8 +1128,9 @@ import * as settingsMod from "./js/settings.js";
     calendar: ["calendar-view"],
     email:    ["email-view"],
     settings: ["settings-view"],
+    logs:     ["logs-view"],
   };
-  const ALL = ["messages", "input-bar", "calendar-view", "email-view", "settings-view"];
+  const ALL = ["messages", "input-bar", "calendar-view", "email-view", "settings-view", "logs-view"];
 
   function showView(name) {
     if (!VIEWS[name]) name = "chat"; // Actions/Logs not built yet -> chat
@@ -1048,6 +1143,7 @@ import * as settingsMod from "./js/settings.js";
     if (name === "calendar" && window.APEX.loadCalendar) window.APEX.loadCalendar();
     if (name === "email" && window.APEX.loadEmail) window.APEX.loadEmail();
     if (name === "settings" && window.APEX.loadSettings) window.APEX.loadSettings();
+    if (name === "logs" && window.APEX.loadLogs) window.APEX.loadLogs();
   }
 
   window.APEX = window.APEX || {};
@@ -1065,47 +1161,143 @@ import * as settingsMod from "./js/settings.js";
 
 
 /* ============================================================================
-   [JS:CALENDAR]  —  loads upcoming events (js/connections.js) into the view
+   [JS:CALENDAR]  —  Google-style MONTH GRID (js/connections.js + js/settings.js)
    ============================================================================ */
 (function () {
-  const listEl = document.getElementById("calendar-list");
+  const grid = document.getElementById("cal-grid");
+  const titleEl = document.getElementById("cal-title");
+  let viewYear, viewMonth;   // which month is shown
+
+  const MONTHS = ["January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December"];
 
   function fmtTime(iso) {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
-  function dayLabel(iso) {
-    const d = new Date(iso); const today = new Date();
-    const isSame = (a, b) => a.toDateString() === b.toDateString();
-    const tom = new Date(today); tom.setDate(today.getDate() + 1);
-    if (isSame(d, today)) return "Today";
-    if (isSame(d, tom)) return "Tomorrow";
-    return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+  function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+  function render() {
+    titleEl.textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+    const events = connectionsMod.eventsForMonth(viewYear, viewMonth);
+
+    // bucket events by day-of-month
+    const byDay = {};
+    events.forEach((e) => {
+      const d = new Date(e.start).getDate();
+      (byDay[d] = byDay[d] || []).push(e);
+    });
+
+    const first = new Date(viewYear, viewMonth, 1);
+    const startDow = first.getDay();                         // 0=Sun
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const daysInPrev = new Date(viewYear, viewMonth, 0).getDate();
+    const today = new Date();
+    const isThisMonth = today.getFullYear() === viewYear && today.getMonth() === viewMonth;
+
+    let html = "";
+    for (let i = 0; i < 42; i++) {                            // 6 weeks
+      const dayNum = i - startDow + 1;
+      const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+      const shown = inMonth ? dayNum : (dayNum < 1 ? daysInPrev + dayNum : dayNum - daysInMonth);
+      const isToday = inMonth && isThisMonth && dayNum === today.getDate();
+
+      let evHtml = "";
+      if (inMonth && byDay[dayNum]) {
+        const list = byDay[dayNum];
+        list.slice(0, 3).forEach((e) => {
+          const color = settingsMod.getColorById(e.colorId).hex;
+          evHtml += `<div class="cal-event" style="background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">${esc(e.title)}</div>`;
+        });
+        if (list.length > 3) evHtml += `<div class="cal-more">+${list.length - 3} more</div>`;
+      }
+
+      html += `<div class="cal-cell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""}">
+        <span class="daynum">${shown}</span>${evHtml}
+      </div>`;
+    }
+    grid.innerHTML = html;
   }
 
   function loadCalendar() {
+    if (viewYear === undefined) { const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth(); }
+    try { render(); }
+    catch (e) { console.error(e); grid.innerHTML = '<div class="cal-more" style="padding:12px">Calendar error — see console.</div>'; }
+  }
+  function step(delta) {
+    viewMonth += delta;
+    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    render();
+  }
+
+  document.getElementById("cal-prev").addEventListener("click", () => step(-1));
+  document.getElementById("cal-next").addEventListener("click", () => step(1));
+  document.getElementById("cal-today").addEventListener("click", () => {
+    const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth(); render();
+  });
+
+  window.APEX = window.APEX || {};
+  window.APEX.loadCalendar = loadCalendar;
+})();
+
+
+/* ============================================================================
+   [JS:LOGS]  —  backend-call logs + scheduled timers (mock, js/connections.js)
+   ============================================================================ */
+(function () {
+  const body = document.getElementById("logs-body");
+  function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+  function relTime(iso) {
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 3600) return Math.round(diff / 60) + "m ago";
+    if (diff < 86400) return Math.round(diff / 3600) + "h ago";
+    return Math.round(diff / 86400) + "d ago";
+  }
+
+  function loadLogs() {
     try {
-      const events = connectionsMod.upcomingEvents(14);
-      if (!events.length) { listEl.innerHTML = '<div class="ev-loc">No upcoming events.</div>'; return; }
-      let html = ""; let curDay = "";
-      events.forEach((e) => {
-        const day = dayLabel(e.start);
-        if (day !== curDay) { html += `<div class="day-heading">${day}</div>`; curDay = day; }
-        html += `<div class="event-card">
-          <div class="ev-title">${e.title}</div>
-          <div class="ev-time">${fmtTime(e.start)} – ${fmtTime(e.end)}</div>
-          ${e.location ? `<div class="ev-loc">📍 ${e.location}</div>` : ""}
-        </div>`;
-      });
-      listEl.innerHTML = html;
+      const timers = connectionsMod.listTimers();
+      const logs = connectionsMod.listBackendLogs();
+
+      const timerHtml = timers.map((t) => `
+        <div class="timer-row">
+          <div>
+            <div class="timer-name">${esc(t.name)}</div>
+            <div class="timer-sched">${esc(t.schedule)} · next: ${esc(t.next)}</div>
+          </div>
+          <span class="timer-toggle ${t.enabled ? "on" : "off"}">${t.enabled ? "ENABLED" : "OFF"}</span>
+        </div>`).join("");
+
+      const logHtml = logs.map((l) => `
+        <div class="log-row">
+          <div class="log-time">${relTime(l.time)}</div>
+          <div class="log-body">
+            <div class="log-action">${esc(l.action)}</div>
+            <div class="log-detail">${esc(l.detail)}</div>
+          </div>
+          <div class="log-meta">
+            <span class="log-src">${esc(l.source)}</span>
+            <span class="log-status ${esc(l.status)}">${esc(l.status)}</span>
+          </div>
+        </div>`).join("");
+
+      body.innerHTML = `
+        <div class="logs-section-title">Scheduled timers</div>
+        <div class="logs-note">For future automation — APEX will run these on a schedule without you opening the UI. (Mock for now.)</div>
+        ${timerHtml}
+        <div class="logs-section-title">Recent backend activity</div>
+        <div class="logs-note">Logs of calls APEX makes when it runs on its own (triggers, automations, APIs) — what it did and when. (Mock for now.)</div>
+        ${logHtml}`;
     } catch (e) {
       console.error(e);
-      listEl.innerHTML = '<div class="ev-loc">Calendar unavailable — see DevTools console.</div>';
+      body.innerHTML = '<div class="logs-note">Logs error — see console.</div>';
     }
   }
 
   window.APEX = window.APEX || {};
-  window.APEX.loadCalendar = loadCalendar;
+  window.APEX.loadLogs = loadLogs;
 })();
 
 
@@ -1220,6 +1412,21 @@ import * as settingsMod from "./js/settings.js";
       </div>
 
       <div class="set-section">
+        <h3>Calendar colors &amp; categories</h3>
+        <div class="set-note" style="margin-bottom:10px;">The exact Google Calendar colors. Assign category keywords to a color (comma-separated) — when you ask APEX to add an event, it matches the title to a color. The one marked <b>def</b> is used for anything that doesn't match (Google's default blue).</div>
+        ${settingsMod.getCalendarColors().map((c) => {
+          const cats = settingsMod.getCalendarCategories();
+          const defId = settingsMod.getDefaultColorId();
+          return `<div class="colorcat-row">
+            <span class="colorcat-swatch" style="background:${c.hex}"></span>
+            <span class="colorcat-name">${c.name}</span>
+            <input class="cat-input" data-color="${c.id}" value="${esc(cats[c.id] || "")}" placeholder="categories e.g. lunch, food">
+            <label class="def-pick" title="Use as the default/Other color"><input type="radio" name="defcolor" value="${c.id}" ${c.id === defId ? "checked" : ""}> def</label>
+          </div>`;
+        }).join("")}
+      </div>
+
+      <div class="set-section">
         <h3>Email accounts</h3>
         ${accountsHtml || '<div class="set-note">No accounts yet — add one below.</div>'}
         <div class="add-acct">
@@ -1260,6 +1467,15 @@ import * as settingsMod from "./js/settings.js";
       label: el.querySelector(".acct-label").value,
       purpose: el.querySelector(".acct-purpose").value,
     })));
+    // calendar color categories + default color
+    const catMap = {};
+    document.querySelectorAll(".cat-input").forEach((i) => {
+      const v = i.value.trim();
+      if (v) catMap[i.dataset.color] = v;
+    });
+    settingsMod.setCalendarCategories(catMap);
+    const def = document.querySelector('input[name="defcolor"]:checked');
+    if (def) settingsMod.setDefaultColorId(def.value);
     flash("✓ saved");
   }
 

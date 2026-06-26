@@ -30,6 +30,14 @@ more mature pipeline is ever needed again.
   and a draft refine that updates the learned writing style both work against live Groq.
 - **Settings page** — paste a Groq/Gemini key (saved only in this browser's `localStorage`), add/
   label/remove email accounts. No server, nothing uploaded.
+- **Calendar** — a real **Google-Calendar-style month grid** (prev/next/today, today circled),
+  events colored with the **exact 11 Google Calendar colors** (Lavender…Tomato). Settings has a
+  **color → category** mapping: assign keywords to a color (e.g. green = "lunch, food"), and APEX
+  picks the color when you say "add Lunch with Taylor". Uncategorized events use the default
+  "Other" blue (Peacock #039BE5, changeable). New `calendar_add` intent creates events
+  (deterministic, no AI call) into local mock data.
+- **Logs page** — mock "Scheduled timers" + "Recent backend activity" feed. Placeholder for the
+  future automation system (APEX running on triggers/timers without the UI, logging what it did).
 - **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
 
 ## 📦 Archived (not deleted)

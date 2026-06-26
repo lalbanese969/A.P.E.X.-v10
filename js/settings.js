@@ -11,9 +11,11 @@
    ============================================================================ */
 
 import { getItem, setItem, ensureSeeded } from "./storage.js";
-import { SEED_ACCOUNTS } from "./seedData.js";
+import { SEED_ACCOUNTS, GOOGLE_CALENDAR_COLORS, DEFAULT_CALENDAR_COLOR_ID, SEED_CALENDAR_CATEGORIES } from "./seedData.js";
 
 ensureSeeded("connections.accounts", SEED_ACCOUNTS);
+ensureSeeded("calendar.categories", SEED_CALENDAR_CATEGORIES);
+ensureSeeded("calendar.defaultColorId", DEFAULT_CALENDAR_COLOR_ID);
 
 const DEFAULT_SETTINGS = {
   groqApiKey: "",
@@ -81,6 +83,47 @@ export function updateAccountLabels(updates) {
   }
   setItem("connections.accounts", data);
   return data.accounts;
+}
+
+/* ---- calendar colors + categories ------------------------------------------
+   The exact Google Calendar colors, plus a colorId -> category-keywords map so
+   APEX can pick the right color when you ask it to add an event. */
+
+export function getCalendarColors() {
+  return GOOGLE_CALENDAR_COLORS;
+}
+
+export function getColorById(id) {
+  return GOOGLE_CALENDAR_COLORS.find((c) => c.id === String(id))
+      || GOOGLE_CALENDAR_COLORS.find((c) => c.id === getDefaultColorId());
+}
+
+export function getCalendarCategories() {
+  return getItem("calendar.categories", SEED_CALENDAR_CATEGORIES);
+}
+
+export function setCalendarCategories(map) {
+  setItem("calendar.categories", map);
+}
+
+export function getDefaultColorId() {
+  return getItem("calendar.defaultColorId", DEFAULT_CALENDAR_COLOR_ID);
+}
+
+export function setDefaultColorId(id) {
+  setItem("calendar.defaultColorId", String(id));
+}
+
+/** Pick a Google colorId for an event title by matching category keywords;
+    falls back to the default ("Other") color when nothing matches. */
+export function colorIdForTitle(title) {
+  const t = (title || "").toLowerCase();
+  const cats = getCalendarCategories();
+  for (const [colorId, kws] of Object.entries(cats)) {
+    const words = String(kws).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (words.some((w) => w && t.includes(w))) return colorId;
+  }
+  return getDefaultColorId();
 }
 
 /** Status snapshot for the UI's status strip — booleans only, never key values. */

@@ -140,20 +140,89 @@ export const SEED_EMAIL_MESSAGES = {
   ],
 };
 
-/** Calendar events generated relative to TODAY (so the demo always feels current). */
+/* ----------------------------------------------------------------------------
+   GOOGLE CALENDAR COLORS
+   The exact 11 Google Calendar EVENT colors (Material palette), by colorId 1–11,
+   with Google's own names and hex values. These match what you see in Google
+   Calendar's event color picker.
+   ---------------------------------------------------------------------------- */
+export const GOOGLE_CALENDAR_COLORS = [
+  { id: "1",  name: "Lavender",  hex: "#7986CB" },
+  { id: "2",  name: "Sage",      hex: "#33B679" },
+  { id: "3",  name: "Grape",     hex: "#8E24AA" },
+  { id: "4",  name: "Flamingo",  hex: "#E67C73" },
+  { id: "5",  name: "Banana",    hex: "#F6BF26" },
+  { id: "6",  name: "Tangerine", hex: "#F4511E" },
+  { id: "7",  name: "Peacock",   hex: "#039BE5" },
+  { id: "8",  name: "Graphite",  hex: "#616161" },
+  { id: "9",  name: "Blueberry", hex: "#3F51B5" },
+  { id: "10", name: "Basil",     hex: "#0B8043" },
+  { id: "11", name: "Tomato",    hex: "#D50000" },
+];
+
+// The "Other"/default color used when an event doesn't match any category.
+// Peacock (#039BE5) is Google Calendar's signature default blue.
+export const DEFAULT_CALENDAR_COLOR_ID = "7";
+
+/* Color -> category keywords. When you ask APEX to add an event, it matches the
+   event title against these keywords to pick the color. Seeded with one example
+   (Basil/green = food/lunch, per your example); fill in the rest from Settings. */
+export const SEED_CALENDAR_CATEGORIES = {
+  "10": "lunch, food, dinner, brunch, breakfast, coffee",
+  "11": "deadline, urgent, due",
+  "4":  "doctor, dentist, appointment, medical",
+  "2":  "hike, hiking, gym, workout, run",
+};
+
+/** Calendar events spread across the CURRENT month (so the month grid looks alive),
+    each tagged with a Google colorId. A couple land on "today" for the chat demo. */
 export function buildSeedCalendarEvents() {
-  const at = (dayOffset, hour, minute = 0) => {
-    const d = new Date();
-    d.setDate(d.getDate() + dayOffset);
-    d.setHours(hour, minute, 0, 0);
-    return d.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
-  };
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth(), today = now.getDate();
+  const p = (n) => String(n).padStart(2, "0");
+  const iso = (day, h, min = 0) => `${y}-${p(m + 1)}-${p(day)}T${p(h)}:${p(min)}`;
   const cid = "gcal_primary";
+  const clamp = (d) => Math.min(Math.max(d, 1), 28);
+
   return [
-    { id: "evt_today_1", calendar_id: cid, title: "Dentist appointment", start: at(0, 14, 0), end: at(0, 15, 0), location: "Downtown Dental" },
-    { id: "evt_today_2", calendar_id: cid, title: "Dinner with Taylor", start: at(0, 18, 30), end: at(0, 20, 0), location: "Sushi place" },
-    { id: "evt_tom_1", calendar_id: cid, title: "Team standup", start: at(1, 9, 30), end: at(1, 10, 0), notes: "Weekly sync" },
-    { id: "evt_d2_1", calendar_id: cid, title: "Project deadline: APEX demo", start: at(2, 17, 0), end: at(2, 17, 30) },
-    { id: "evt_d4_1", calendar_id: cid, title: "Hiking - coast trail", start: at(4, 8, 0), end: at(4, 12, 0), location: "Coast trailhead" },
+    { id: "evt_t1", calendar_id: cid, title: "Lunch with Taylor",        start: iso(today, 12, 0),         end: iso(today, 13, 0),         location: "Sushi place",     colorId: "10" },
+    { id: "evt_t2", calendar_id: cid, title: "Dentist appointment",      start: iso(today, 15, 0),         end: iso(today, 16, 0),         location: "Downtown Dental", colorId: "4"  },
+    { id: "evt_a",  calendar_id: cid, title: "Team standup",             start: iso(clamp(today + 1), 9, 30), end: iso(clamp(today + 1), 10, 0), notes: "Weekly sync",    colorId: "7"  },
+    { id: "evt_b",  calendar_id: cid, title: "Project deadline: demo",   start: iso(clamp(today + 2), 17, 0), end: iso(clamp(today + 2), 17, 30),                          colorId: "11" },
+    { id: "evt_c",  calendar_id: cid, title: "Hiking - coast trail",     start: iso(clamp(today + 4), 8, 0),  end: iso(clamp(today + 4), 12, 0), location: "Coast trail", colorId: "2"  },
+    { id: "evt_d",  calendar_id: cid, title: "Pay rent",                 start: iso(3, 9, 0),               end: iso(3, 9, 15),                                          colorId: "5"  },
+    { id: "evt_e",  calendar_id: cid, title: "Coffee with Sam",          start: iso(6, 10, 0),              end: iso(6, 11, 0),             location: "Blue Bottle",     colorId: "10" },
+    { id: "evt_f",  calendar_id: cid, title: "Movie night",              start: iso(9, 20, 0),              end: iso(9, 22, 30),                                         colorId: "1"  },
+    { id: "evt_g",  calendar_id: cid, title: "Gym",                      start: iso(11, 7, 0),              end: iso(11, 8, 0),                                          colorId: "2"  },
+    { id: "evt_h",  calendar_id: cid, title: "Dinner with parents",      start: iso(16, 18, 30),           end: iso(16, 20, 0),                                         colorId: "10" },
+    { id: "evt_i",  calendar_id: cid, title: "Quarterly review",         start: iso(20, 14, 0),            end: iso(20, 15, 0),            notes: "Bring slides",       colorId: "9"  },
+    { id: "evt_j",  calendar_id: cid, title: "Flight to NYC",            start: iso(24, 6, 0),             end: iso(24, 9, 0),             location: "SFO",             colorId: "6"  },
+    { id: "evt_k",  calendar_id: cid, title: "Call plumber",             start: iso(27, 11, 0),            end: iso(27, 11, 30),                                        colorId: "7"  },
   ];
 }
+
+/* ----------------------------------------------------------------------------
+   LOGS + TIMERS (mock, for the future automation/backend-calls feature)
+   The Logs page is for when APEX runs WITHOUT the UI — scheduled triggers,
+   automations, external API calls — recording what it did and when. Timers are
+   the scheduled calls that will drive those automations later.
+   ---------------------------------------------------------------------------- */
+export function buildSeedLogs() {
+  const now = Date.now();
+  const ago = (hours) => new Date(now - hours * 3600 * 1000).toISOString();
+  return [
+    { time: ago(1),  source: "scheduled-trigger", action: "morning_briefing",     detail: "Generated daily summary (3 events, 2 unread emails)", status: "ok" },
+    { time: ago(4),  source: "automation",        action: "stale_email_followup", detail: "Scanned inbox for threads with no reply > 5 days (0 found)", status: "ok" },
+    { time: ago(7),  source: "api",               action: "calendar_sync",        detail: "Pulled 13 events from Google Calendar", status: "ok" },
+    { time: ago(12), source: "scheduled-trigger", action: "draft_replies",        detail: "Prepared 1 draft reply for review", status: "ok" },
+    { time: ago(26), source: "automation",        action: "lights_evening",       detail: "Attempted to dim strip lights — not yet connected", status: "skipped" },
+    { time: ago(30), source: "api",               action: "weather_check",        detail: "Fetched forecast for morning briefing", status: "error" },
+  ];
+}
+
+export const SEED_TIMERS = [
+  { name: "Morning briefing",     schedule: "Daily · 8:00 AM",   next: "tomorrow 8:00 AM", enabled: true },
+  { name: "Stale email follow-up", schedule: "Every 6 hours",     next: "in ~2 hours",      enabled: true },
+  { name: "Weekly review",        schedule: "Sundays · 6:00 PM", next: "Sunday 6:00 PM",   enabled: true },
+  { name: "Evening lights",       schedule: "Daily · sunset",    next: "today ~8:14 PM",   enabled: false },
+];

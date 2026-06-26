@@ -17,6 +17,7 @@
 
 import * as memory from "./memory.js";
 import * as connections from "./connections.js";
+import * as settingsMod from "./settings.js";
 import { runTask, AIError } from "./aiCenter.js";
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
@@ -30,7 +31,13 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
   let aiMeta = { provider: null, model: null };
 
   try {
-    if (intent === "calendar_query") {
+    if (intent === "calendar_add") {
+      // Deterministic action (no AI call needed): create the event with the
+      // color matched from its category.
+      const r = addEvent(prompt);
+      result.event = r.event;
+      result.apex_response = r.message;
+    } else if (intent === "calendar_query") {
       const events = connections.upcomingEvents(params.days);
       result.calendar = events;
       const r = await answer(prompt, packet, { calendar: events });
@@ -86,6 +93,17 @@ function heuristicIntent(prompt, hasPriorDraft) {
 
   const refineWords = ["change", "shorter", "longer", "make it", "instead", "tone", "reword", "tweak", "more formal", "less formal"];
   if (hasPriorDraft && refineWords.some((w) => p.includes(w))) return { intent: "email_refine", params };
+
+  // calendar_add: an "add/schedule" verb + an event noun / time / the word calendar
+  const addVerbs = ["add", "schedule", "create", "put", "set up", "book", "plan"];
+  const eventNouns = ["lunch", "dinner", "breakfast", "brunch", "coffee", "meeting", "appointment",
+                      "event", "call", "party", "date", "gym", "workout", "flight", "reminder"];
+  const timeish = ["today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday",
+                   "saturday", "sunday", " at ", "pm", "am", " on "];
+  if (addVerbs.some((w) => p.includes(w)) &&
+      (p.includes("calendar") || eventNouns.some((n) => p.includes(n)) || timeish.some((t) => p.includes(t)))) {
+    return { intent: "calendar_add", params };
+  }
 
   const draftWords = ["draft", "reply", "respond", "write an email", "compose", "resend", "follow up"];
   if (draftWords.some((w) => p.includes(w))) return { intent: "email_draft", params };
@@ -191,6 +209,82 @@ function pickSubject(ref, priorDraft) {
   if (priorDraft?.subject) return priorDraft.subject;
   if (ref) return ref.subject.toLowerCase().startsWith("re:") ? ref.subject : `Re: ${ref.subject}`;
   return "(no subject)";
+}
+
+/* ---- calendar add (deterministic, no AI) ------------------------------------ */
+
+function addEvent(prompt) {
+  const { title, start, end, dateLabel, timeLabel } = parseEvent(prompt);
+  const colorId = settingsMod.colorIdForTitle(title);
+  const color = settingsMod.getColorById(colorId);
+  const ev = connections.addCalendarEvent({ title, start, end, colorId });
+  const isDefault = colorId === settingsMod.getDefaultColorId();
+  const colorNote = isDefault ? `${color.name} — default/Other` : color.name;
+  return {
+    event: ev,
+    message: `Added "${title}" to your calendar — ${dateLabel} at ${timeLabel} · color ${colorNote}.`,
+  };
+}
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+function parseEvent(prompt) {
+  const p = prompt.toLowerCase();
+  const day = new Date();
+
+  // --- which day ---
+  if (p.includes("tomorrow")) {
+    day.setDate(day.getDate() + 1);
+  } else {
+    for (let i = 0; i < 7; i++) {
+      if (p.includes(WEEKDAYS[i])) {
+        const delta = (i - day.getDay() + 7) % 7 || 7; // next occurrence of that weekday
+        day.setDate(day.getDate() + delta);
+        break;
+      }
+    }
+  }
+
+  // --- what time (default noon) ---
+  let hour = 12, min = 0;
+  const tm = p.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+  if (tm) {
+    hour = (parseInt(tm[1], 10) % 12) + (tm[3] === "pm" ? 12 : 0);
+    min = tm[2] ? parseInt(tm[2], 10) : 0;
+  } else {
+    const at = p.match(/\bat\s+(\d{1,2})(?::(\d{2}))?/);
+    if (at) { hour = parseInt(at[1], 10); min = at[2] ? parseInt(at[2], 10) : 0; }
+  }
+  day.setHours(hour, min, 0, 0);
+  const endDate = new Date(day.getTime() + 60 * 60 * 1000);
+
+  return {
+    title: cleanEventTitle(prompt),
+    start: localIso(day),
+    end: localIso(endDate),
+    dateLabel: day.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" }),
+    timeLabel: day.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  };
+}
+
+function cleanEventTitle(prompt) {
+  let t = prompt
+    .replace(/^(can you|could you|please|hey apex|apex|yo)\b[,:]?\s*/i, "")
+    .replace(/\b(add|schedule|create|put|set up|book|plan)\b/i, "")
+    .replace(/\b(to|on|in)\s+(my\s+)?(google\s+)?calendar\b/i, "")
+    .replace(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/ig, "")
+    .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(am|pm)?/ig, "")
+    .replace(/\b\d{1,2}(?::\d{2})?\s*(am|pm)\b/ig, "")
+    .replace(/\bnext\b/ig, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s,–-]+|[\s,–-]+$/g, "")
+    .trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "New event";
+}
+
+function localIso(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /* ---- prompt building blocks -------------------------------------------------- */

@@ -13,13 +13,15 @@
    ============================================================================ */
 
 import { getItem, setItem, ensureSeeded } from "./storage.js";
-import { SEED_EMAIL_MESSAGES, buildSeedCalendarEvents } from "./seedData.js";
+import { SEED_EMAIL_MESSAGES, buildSeedCalendarEvents, buildSeedLogs, SEED_TIMERS } from "./seedData.js";
 import { listAccounts } from "./settings.js";
 
 for (const [acctId, msgs] of Object.entries(SEED_EMAIL_MESSAGES)) {
   ensureSeeded(`connections.emailMessages.${acctId}`, msgs);
 }
 ensureSeeded("connections.calendarEvents", buildSeedCalendarEvents());
+ensureSeeded("logs.backend", buildSeedLogs());
+ensureSeeded("automation.timers", SEED_TIMERS);
 
 /* ---- email ------------------------------------------------------------------ */
 
@@ -70,13 +72,17 @@ export function listDrafts() {
 
 /* ---- calendar ----------------------------------------------------------------- */
 
+export function allEvents() {
+  return getItem("connections.calendarEvents", []);
+}
+
 export function upcomingEvents(days = 7) {
-  const events = getItem("connections.calendarEvents", []);
+  const events = allEvents();
   const now = new Date();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + days);
   cutoff.setHours(23, 59, 59, 999);
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localDateStr(now);
   return events
     .filter((e) => {
       const start = new Date(e.start);
@@ -85,8 +91,45 @@ export function upcomingEvents(days = 7) {
     .sort((a, b) => (a.start < b.start ? -1 : 1));
 }
 
+/** All events whose start falls in the given month (0-based month), sorted. */
+export function eventsForMonth(year, month) {
+  return allEvents()
+    .filter((e) => {
+      const d = new Date(e.start);
+      return d.getFullYear() === year && d.getMonth() === month;
+    })
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
+}
+
+/** Create a calendar event (mock — stored locally, nothing sent to a real calendar). */
+export function addCalendarEvent({ title, start, end, location = "", colorId = "7", notes = "" }) {
+  const events = allEvents();
+  const ev = {
+    id: `evt_${Date.now()}`,
+    calendar_id: "gcal_primary",
+    title, start, end, location, notes, colorId,
+  };
+  events.push(ev);
+  setItem("connections.calendarEvents", events);
+  return ev;
+}
+
 function startOfToday(d) {
   const s = new Date(d);
   s.setHours(0, 0, 0, 0);
   return s;
+}
+function localDateStr(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/* ---- backend logs + automation timers (mock, for the Logs page) ------------- */
+
+export function listBackendLogs() {
+  return getItem("logs.backend", []);
+}
+
+export function listTimers() {
+  return getItem("automation.timers", []);
 }
