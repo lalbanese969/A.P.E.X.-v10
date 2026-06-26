@@ -39,23 +39,26 @@
    ============================================================================ */
 :root {
   /* --- Colors --- */
-  --color-black:        #0a0a0a;   /* main background */
-  --color-panel:        #0d0d0d;   /* panel background (slightly off-black) */
+  --color-black:        #0a0a0b;   /* main background */
+  --color-panel:        #0b0b0d;   /* sidebar panel background */
   --color-orange:       #ff7a00;   /* main accent orange */
-  --color-orange-soft:  #ff9a3c;   /* lighter orange (text highlights) */
-  --color-text:         #e8e8e8;   /* off-white body text */
-  --color-text-dim:     #8a8a8a;   /* dim/secondary text */
+  --color-orange-soft:  #ffa64d;   /* lighter orange (text highlights) */
+  --color-text:         #ececec;   /* off-white body text */
+  --color-text-dim:     #7c7c82;   /* dim/secondary text */
+  --color-icon:         #6b6b72;   /* unified MUTED color for nav icons/labels */
 
-  /* --- Glow --- */
-  --glow-orange:        rgba(255, 122, 0, 0.55);  /* border glow color */
-  --glow-blur:          14px;                      /* border glow softness */
+  /* --- Structural lines (these connect the panels) --- */
+  --line:               rgba(255, 122, 0, 0.20);   /* glowing orange divider lines */
+  --line-soft:          rgba(255, 255, 255, 0.06); /* subtle internal dividers */
+
+  /* --- Glow (used sparingly now — no more per-box glow) --- */
+  --glow-orange:        rgba(255, 122, 0, 0.45);
 
   /* --- Sizes (CHANGE SIDEBAR WIDTHS HERE) --- */
-  --sidebar-left-width:  240px;
-  --sidebar-right-width: 240px;
-  --header-height:       60px;
-  --radius:              14px;     /* corner roundness everywhere */
-  --gap:                 14px;     /* spacing between the 3 columns */
+  --sidebar-left-width:  232px;
+  --sidebar-right-width: 232px;
+  --header-height:       56px;
+  --radius:              12px;     /* corner roundness on small elements only */
 }
 
 /* ============================================================================
@@ -75,61 +78,72 @@ body {
   background: var(--color-black);
   color: var(--color-text);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden; /* the panels scroll internally, not the whole page */
   display: flex;
   flex-direction: column;
 }
 
 /* ============================================================================
-   [STYLE:GLOW]  —  reusable glowing orange border
-   Add class="glow" to any element to give it the orange border + glow.
+   [STYLE:GLOW]  —  deprecated utility (kept harmless; the redesign uses thin
+   connecting LINES instead of per-box glow, which is what smudged the corners).
    ============================================================================ */
-.glow {
-  border: 1px solid var(--color-orange);
-  box-shadow:
-    0 0 var(--glow-blur) var(--glow-orange),       /* outer glow */
-    inset 0 0 8px rgba(255, 122, 0, 0.10);          /* faint inner glow */
-}
+.glow { }
 
 /* ============================================================================
-   [STYLE:HEADER]  —  top header bar
+   [STYLE:HEADER]  —  top header bar (full-width glowing line underneath)
    ============================================================================ */
 #header {
   height: var(--header-height);
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 22px;
+  gap: 11px;
+  padding: 0 20px;
   background: var(--color-panel);
-  border-bottom: 1px solid var(--color-orange);
-  box-shadow: 0 0 var(--glow-blur) var(--glow-orange);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 6px 26px -14px var(--glow-orange); /* soft downward glow, no corners */
   position: relative;
   z-index: 10;
 }
 
-#header .logo {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 2px;
+/* hexagon brand mark — ties the wordmark to the honeycomb background */
+#header .brand-mark {
+  width: 20px;
+  height: 20px;
   color: var(--color-orange);
-  text-shadow: 0 0 10px var(--glow-orange);
+  filter: drop-shadow(0 0 5px var(--glow-orange));
+}
+#header .logo {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--color-text);
+}
+#header .logo .accent { color: var(--color-orange); }
+#header .ver {
+  margin-left: 2px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--color-orange);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 7px;
 }
 
 /* ============================================================================
-   [STYLE:LAYOUT]  —  the 3-column row under the header
+   [STYLE:LAYOUT]  —  the 3-column row, FULL-BLEED and CONNECTED (no gaps).
+   Sidebars are joined to the chat by glowing divider lines (set on each
+   sidebar's inner edge) that run full height and meet the header line.
    ============================================================================ */
 #main {
   flex: 1;
   display: flex;
-  gap: var(--gap);
-  padding: var(--gap);
   min-height: 0; /* lets children scroll instead of overflowing */
 }
 
-/* Shared look for all three columns */
 .panel {
   background: var(--color-panel);
-  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -141,81 +155,75 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 16px;
-}
-
-/* APEX brand block at top of left sidebar */
-#sidebar-left .brand {
-  margin-bottom: 6px;
-}
-#sidebar-left .brand .brand-title {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--color-orange);
-  text-shadow: 0 0 8px var(--glow-orange);
-}
-#sidebar-left .brand .brand-sub {
-  font-size: 11px;
-  color: var(--color-text-dim);
-  margin-top: 2px;
-}
-
-/* Divider line */
-.divider {
-  height: 1px;
-  background: rgba(255, 122, 0, 0.25);
-  margin: 14px 0;
+  padding: 16px 12px;
+  border-right: 1px solid var(--line);   /* the line that touches the chat */
 }
 
 /* "+ New Chat" button */
 .new-chat-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 11px;
   border-radius: 10px;
-  background: rgba(255, 122, 0, 0.10);
-  border: 1px solid var(--color-orange);
+  background: rgba(255, 122, 0, 0.12);
+  border: 1px solid var(--line);
   color: var(--color-orange);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s;
 }
-.new-chat-btn:hover {
-  background: rgba(255, 122, 0, 0.20);
-  box-shadow: 0 0 10px var(--glow-orange);
+.new-chat-btn:hover { background: rgba(255, 122, 0, 0.22); }
+
+/* small uppercase section label (e.g. NAVIGATION) */
+.nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  margin: 20px 6px 8px;
 }
 
-/* Nav items: Calendar, Email, Actions, Logs */
+/* Nav items — unified MONOCHROME line icons, orange only when active/hover */
 .nav-list {
-  margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: var(--color-text);
-  font-size: 14px;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--color-icon);
+  font-size: 13.5px;
   cursor: pointer;
-  border: 1px solid transparent;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.nav-item:hover {
-  background: rgba(255, 122, 0, 0.08);
-  border-color: rgba(255, 122, 0, 0.5);
-  color: var(--color-orange-soft);
+  transition: background 0.15s, color 0.15s;
 }
 .nav-item .icon {
-  width: 18px;
-  text-align: center;
-  opacity: 0.9;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  display: flex;
+}
+.nav-item .icon svg { width: 100%; height: 100%; }
+.nav-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--color-text); }
+.nav-item.active { color: var(--color-orange); background: rgba(255, 122, 0, 0.10); }
+/* little left accent bar on the active item */
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 7px; bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-orange);
+  box-shadow: 0 0 6px var(--glow-orange);
 }
 
 /* ============================================================================
@@ -256,74 +264,76 @@ body {
   gap: 12px;
 }
 
-/* A single message bubble */
+/* A single message bubble — asymmetric "tail" corners for a chat-app feel */
 .msg {
-  max-width: 75%;
-  padding: 11px 15px;
-  border-radius: 12px;
+  max-width: 74%;
+  padding: 10px 14px;
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
-/* Message from the USER (right side, orange) */
+/* Message from the USER (right side, soft orange) */
 .msg.user {
   align-self: flex-end;
   background: rgba(255, 122, 0, 0.16);
-  border: 1px solid rgba(255, 122, 0, 0.6);
+  border: 1px solid rgba(255, 122, 0, 0.32);
   color: var(--color-text);
+  border-radius: 16px 16px 4px 16px;
 }
 /* Message from APEX (left side, dark) */
 .msg.apex {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line-soft);
   color: var(--color-text);
+  border-radius: 16px 16px 16px 4px;
 }
 
-/* Input bar at the bottom of the chat */
+/* Input bar — MINIMAL: floats over the honeycomb, a pill + round arrow button */
 #input-bar {
   position: relative;
   z-index: 1;
   display: flex;
+  align-items: center;
   gap: 10px;
-  padding: 14px;
-  background: rgba(0, 0, 0, 0.6);
-  border-top: 1px solid rgba(255, 122, 0, 0.35);
+  padding: 12px 18px 18px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
 }
 #input-bar input {
   flex: 1;
-  padding: 12px 16px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 122, 0, 0.5);
-  background: rgba(20, 20, 20, 0.9);
+  padding: 12px 18px;
+  border-radius: 22px;
+  border: 1px solid var(--line-soft);
+  background: rgba(22, 22, 25, 0.85);
   color: var(--color-text);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 #input-bar input:focus {
-  border-color: var(--color-orange);
-  box-shadow: 0 0 10px var(--glow-orange);
+  border-color: rgba(255, 122, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.08);
 }
-#input-bar input::placeholder {
-  color: var(--color-text-dim);
-}
+#input-bar input::placeholder { color: var(--color-text-dim); }
+
+/* round send button with an up-arrow icon (no "Send" text) */
 #input-bar .send-btn {
-  padding: 0 22px;
-  border-radius: 10px;
-  border: 1px solid var(--color-orange);
-  background: rgba(255, 122, 0, 0.18);
-  color: var(--color-orange);
-  font-size: 14px;
-  font-weight: 600;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-orange);
+  color: #160b00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: filter 0.15s, box-shadow 0.15s;
 }
-#input-bar .send-btn:hover {
-  background: rgba(255, 122, 0, 0.30);
-  box-shadow: 0 0 10px var(--glow-orange);
-}
+#input-bar .send-btn svg { width: 18px; height: 18px; }
+#input-bar .send-btn:hover { filter: brightness(1.12); box-shadow: 0 0 12px var(--glow-orange); }
 
 /* ============================================================================
    [STYLE:RIGHT]  —  right sidebar (Tasks)
@@ -333,14 +343,15 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 16px 14px;
+  border-left: 1px solid var(--line);    /* the line that touches the chat */
 }
 #sidebar-right .panel-title {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  color: var(--color-orange);
-  text-shadow: 0 0 8px var(--glow-orange);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
 }
 
 /* A single task row */
@@ -348,16 +359,16 @@ body {
   margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 .task-item {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 122, 0, 0.18);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line-soft);
   font-size: 13px;
   color: var(--color-text);
 }
@@ -365,7 +376,7 @@ body {
   width: 15px;
   height: 15px;
   border-radius: 4px;
-  border: 1px solid var(--color-orange);
+  border: 1px solid var(--color-icon);
   flex-shrink: 0;
 }
 
@@ -385,12 +396,14 @@ body {
   gap: 12px;
 }
 .center-view .view-title {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--color-orange);
-  text-shadow: 0 0 8px var(--glow-orange);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  padding-bottom: 12px;
   margin-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 /* a single calendar event row */
@@ -495,9 +508,9 @@ body {
 .add-acct { border-top: 1px solid rgba(255,122,0,0.2); padding-top: 6px; margin-top: 6px; }
 
 /* status strip (bottom of left sidebar) */
-#status-strip { margin-top: auto; padding-top: 12px; font-size: 11px; color: var(--color-text-dim); }
-#status-strip .st-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-.st-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; flex-shrink: 0; }
+#status-strip { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--color-text-dim); }
+#status-strip .st-row { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
+.st-dot { width: 7px; height: 7px; border-radius: 50%; background: #4a4a4f; flex-shrink: 0; }
 .st-dot.ok  { background: #44d07a; box-shadow: 0 0 6px #44d07a; }
 .st-dot.off { background: #d04444; }
 
@@ -518,7 +531,13 @@ body {
      [HTML:HEADER]  —  top bar
      ========================================================================== -->
 <header id="header">
-  <div class="logo">A.P.E.X. v10</div>
+  <!-- hexagon brand mark (echoes the honeycomb) -->
+  <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M7 3h10l5 9-5 9H7L2 12z"/>
+    <path d="M9.5 8.5h5l2.5 3.5-2.5 3.5h-5L7 12z" stroke-width="1.1" opacity="0.55"/>
+  </svg>
+  <div class="logo"><span class="accent">A</span>.P.<span class="accent">E</span>.X.</div>
+  <span class="ver">v10</span>
 </header>
 
 <!-- ==========================================================================
@@ -529,27 +548,35 @@ body {
   <!-- ----------------------------------------------------------------------
        [HTML:LEFT]  —  left sidebar (navigation)
        ---------------------------------------------------------------------- -->
-  <aside id="sidebar-left" class="panel glow">
-    <div class="brand">
-      <div class="brand-title">APEX</div>
-      <div class="brand-sub">main chat interface</div>
-    </div>
-
-    <div class="divider"></div>
-
+  <aside id="sidebar-left" class="panel">
     <!-- New Chat button (also returns to the chat view) -->
     <div class="new-chat-btn" id="new-chat-btn">
-      <span>＋</span><span>New Chat</span>
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      <span>New Chat</span>
     </div>
 
-    <!-- Nav items: each switches the center view (data-view) -->
+    <div class="nav-label">Navigation</div>
+
+    <!-- Nav items: monochrome line icons; each switches the center view (data-view) -->
     <nav class="nav-list">
-      <div class="nav-item active" data-view="chat" id="nav-chat"><span class="icon">💬</span><span>Chat</span></div>
-      <div class="nav-item" data-view="calendar" id="nav-calendar"><span class="icon">📅</span><span>Calendar</span></div>
-      <div class="nav-item" data-view="email" id="nav-email"><span class="icon">✉️</span><span>Email</span></div>
-      <div class="nav-item" data-view="actions"><span class="icon">⚡</span><span>Actions</span></div>
-      <div class="nav-item" data-view="logs"><span class="icon">📜</span><span>Logs</span></div>
-      <div class="nav-item" data-view="settings" id="nav-settings"><span class="icon">⚙️</span><span>Settings</span></div>
+      <div class="nav-item active" data-view="chat" id="nav-chat">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg></span><span>Chat</span>
+      </div>
+      <div class="nav-item" data-view="calendar" id="nav-calendar">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 9.5h18"/></svg></span><span>Calendar</span>
+      </div>
+      <div class="nav-item" data-view="email" id="nav-email">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><span>Email</span>
+      </div>
+      <div class="nav-item" data-view="actions">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span><span>Actions</span>
+      </div>
+      <div class="nav-item" data-view="logs">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span><span>Logs</span>
+      </div>
+      <div class="nav-item" data-view="settings" id="nav-settings">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span><span>Settings</span>
+      </div>
     </nav>
 
     <!-- [HTML:STATUS] connection status (filled by [JS:STATUS] from js/settings.js, localStorage) -->
@@ -563,7 +590,7 @@ body {
   <!-- ----------------------------------------------------------------------
        [HTML:CHAT]  —  center chat panel
        ---------------------------------------------------------------------- -->
-  <section id="chat" class="glow" style="border-radius: var(--radius);">
+  <section id="chat">
     <!-- animated honeycomb background -->
     <canvas id="honeycomb"></canvas>
 
@@ -572,26 +599,28 @@ body {
       <div class="msg apex">A.P.E.X. v10 online. This is the main chat interface — type below to begin.</div>
     </div>
     <div id="input-bar">
-      <input id="chat-input" type="text" placeholder="Type a message..." autocomplete="off" />
-      <button class="send-btn" id="send-btn">Send</button>
+      <input id="chat-input" type="text" placeholder="Message A.P.E.X.…" autocomplete="off" />
+      <button class="send-btn" id="send-btn" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
     </div>
 
     <!-- ===== CALENDAR VIEW (hidden until you click Calendar) ===== -->
     <div id="calendar-view" class="center-view" hidden>
-      <div class="view-title">📅 Calendar — Upcoming</div>
+      <div class="view-title">Calendar — Upcoming</div>
       <div id="calendar-list"><div class="ev-loc">Loading…</div></div>
     </div>
 
     <!-- ===== EMAIL VIEW (hidden until you click Email) ===== -->
     <div id="email-view" class="center-view" hidden>
-      <div class="view-title">✉️ Email</div>
+      <div class="view-title">Email</div>
       <div class="email-accounts" id="email-accounts"></div>
       <div id="email-list"><div class="em-snip">Loading…</div></div>
     </div>
 
     <!-- ===== SETTINGS VIEW (hidden until you click Settings) ===== -->
     <div id="settings-view" class="center-view" hidden>
-      <div class="view-title">⚙️ Settings</div>
+      <div class="view-title">Settings</div>
       <div id="settings-body"><div class="set-note">Loading…</div></div>
     </div>
   </section>
@@ -599,8 +628,8 @@ body {
   <!-- ----------------------------------------------------------------------
        [HTML:RIGHT]  —  right sidebar (Tasks)
        ---------------------------------------------------------------------- -->
-  <aside id="sidebar-right" class="panel glow">
-    <div class="panel-title">TASKS</div>
+  <aside id="sidebar-right" class="panel">
+    <div class="panel-title">Tasks</div>
     <div class="task-list">
       <div class="task-item"><span class="checkbox"></span><span>Placeholder task one</span></div>
       <div class="task-item"><span class="checkbox"></span><span>Placeholder task two</span></div>
@@ -939,7 +968,7 @@ import * as settingsMod from "./js/settings.js";
     const card = document.createElement("div");
     card.className = "draft-card";
     card.innerHTML = `
-      <div class="dc-head">✉️ DRAFT EMAIL</div>
+      <div class="dc-head">DRAFT EMAIL</div>
       <label>To</label><input class="dc-to" value="">
       <label>Subject</label><input class="dc-subj" value="">
       <label>Body</label><textarea class="dc-body"></textarea>
