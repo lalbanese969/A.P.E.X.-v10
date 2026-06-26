@@ -114,6 +114,14 @@ export function addCalendarEvent({ title, start, end, location = "", colorId = "
   return ev;
 }
 
+export function getEventById(id) {
+  return allEvents().find((e) => e.id === id) || null;
+}
+
+export function deleteCalendarEvent(id) {
+  setItem("connections.calendarEvents", allEvents().filter((e) => e.id !== id));
+}
+
 function startOfToday(d) {
   const s = new Date(d);
   s.setHours(0, 0, 0, 0);

@@ -582,8 +582,28 @@ body {
   position: relative; border-left: 1px solid var(--line-soft);
   background: repeating-linear-gradient(to bottom, transparent 0, transparent 43px, var(--line-soft) 43px, var(--line-soft) 44px);
 }
-.week-event { position: absolute; left: 2px; right: 2px; border-radius: 4px; color: #fff; font-size: 10px; line-height: 1.2; padding: 2px 5px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.week-event { position: absolute; left: 2px; right: 2px; border-radius: 4px; color: #fff; font-size: 10px; line-height: 1.2; padding: 2px 5px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.35); cursor: pointer; }
 .week-event .we-time { opacity: 0.85; font-size: 9px; }
+.cal-event { cursor: pointer; }
+
+/* ----- event detail popover (click an event, like Google Calendar) ----- */
+#event-pop-backdrop { position: fixed; inset: 0; z-index: 40; }
+#event-pop {
+  position: fixed; z-index: 41; width: 290px; background: #161618;
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.6);
+}
+#event-pop .ep-bar { height: 6px; }
+#event-pop .ep-body { padding: 14px 16px 16px; position: relative; }
+#event-pop .ep-close { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-dim); font-size: 18px; line-height: 1; cursor: pointer; border-radius: 6px; }
+#event-pop .ep-close:hover { background: rgba(255, 255, 255, 0.06); color: var(--color-text); }
+#event-pop .ep-title { font-size: 16px; font-weight: 600; color: var(--color-text); margin: 2px 30px 12px 0; }
+#event-pop .ep-row { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; color: var(--color-text-dim); margin-bottom: 8px; }
+#event-pop .ep-row .ep-ic { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.7; margin-top: 1px; }
+#event-pop .ep-dot { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; margin-top: 1px; }
+#event-pop .ep-actions { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+#event-pop .ep-del { font-size: 12px; color: #ff8a8a; background: none; border: 1px solid rgba(208, 68, 68, 0.4); border-radius: 7px; padding: 6px 13px; cursor: pointer; }
+#event-pop .ep-del:hover { background: rgba(208, 68, 68, 0.12); }
 
 /* ============================================================================
    [STYLE:LOGS-VIEW]  —  backend-call logs + scheduled timers (mock)
@@ -1241,7 +1261,7 @@ import * as settingsMod from "./js/settings.js";
         let dur = (en - s) / 3600000; if (!(dur > 0)) dur = 1;
         const h = Math.max(dur * HH, 18);
         const color = settingsMod.getColorById(e.colorId).hex;
-        evHtml += `<div class="week-event" style="top:${top}px;height:${h}px;background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">
+        evHtml += `<div class="week-event" data-id="${esc(e.id)}" style="top:${top}px;height:${h}px;background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">
           <div>${esc(e.title)}</div><div class="we-time">${fmtTime(e.start)}</div></div>`;
       });
       cols += `<div class="week-col">${evHtml}</div>`;
@@ -1281,7 +1301,7 @@ import * as settingsMod from "./js/settings.js";
       if (inMonth && byDay[dayNum]) {
         byDay[dayNum].slice(0, 3).forEach((e) => {
           const color = settingsMod.getColorById(e.colorId).hex;
-          evHtml += `<div class="cal-event" style="background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">${esc(e.title)}</div>`;
+          evHtml += `<div class="cal-event" data-id="${esc(e.id)}" style="background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">${esc(e.title)}</div>`;
         });
         if (byDay[dayNum].length > 3) evHtml += `<div class="cal-more">+${byDay[dayNum].length - 3} more</div>`;
       }
@@ -1310,6 +1330,76 @@ import * as settingsMod from "./js/settings.js";
   document.getElementById("cal-today").addEventListener("click", () => { ref = new Date(); render(); });
   document.getElementById("cal-mode-week").addEventListener("click", () => { mode = "week"; render(); });
   document.getElementById("cal-mode-month").addEventListener("click", () => { mode = "month"; render(); });
+
+  /* ---- event detail popover (click an event, like Google Calendar) ---- */
+  const ICON = {
+    clock: `<svg class="ep-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/></svg>`,
+    pin:   `<svg class="ep-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>`,
+    note:  `<svg class="ep-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>`,
+  };
+
+  function closePopover() {
+    document.getElementById("event-pop")?.remove();
+    document.getElementById("event-pop-backdrop")?.remove();
+  }
+
+  function openPopover(anchorEl, id) {
+    const ev = connectionsMod.getEventById(id);
+    if (!ev) return;
+    closePopover();
+
+    const color = settingsMod.getColorById(ev.colorId);
+    const s = new Date(ev.start);
+    const dateLine = s.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+    const timeLine = `${fmtTime(ev.start)} – ${fmtTime(ev.end)}`;
+    const cat = settingsMod.getCalendarCategories()[ev.colorId];
+    const isDefault = ev.colorId === settingsMod.getDefaultColorId();
+    const colorLine = `${color.name}${cat ? ` · ${esc(cat)}` : (isDefault ? " · default / Other" : "")}`;
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "event-pop-backdrop";
+    const pop = document.createElement("div");
+    pop.id = "event-pop";
+    pop.innerHTML = `
+      <div class="ep-bar" style="background:${color.hex}"></div>
+      <div class="ep-body">
+        <button class="ep-close" aria-label="Close">×</button>
+        <div class="ep-title">${esc(ev.title)}</div>
+        <div class="ep-row">${ICON.clock}<div>${dateLine}<br>${timeLine}</div></div>
+        ${ev.location ? `<div class="ep-row">${ICON.pin}<div>${esc(ev.location)}</div></div>` : ""}
+        ${ev.notes ? `<div class="ep-row">${ICON.note}<div>${esc(ev.notes)}</div></div>` : ""}
+        <div class="ep-row"><span class="ep-dot" style="background:${color.hex}"></span><div>${colorLine}</div></div>
+        <div class="ep-actions"><button class="ep-del">Delete event</button></div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    document.body.appendChild(pop);
+
+    // position near the clicked event, clamped to the viewport
+    const r = anchorEl.getBoundingClientRect();
+    let left = r.right + 8;
+    if (left + 290 > window.innerWidth - 12) left = r.left - 298;
+    if (left < 12) left = 12;
+    let top = r.top;
+    const ph = pop.offsetHeight;
+    if (top + ph > window.innerHeight - 12) top = window.innerHeight - ph - 12;
+    if (top < 12) top = 12;
+    pop.style.left = left + "px";
+    pop.style.top = top + "px";
+
+    backdrop.addEventListener("click", closePopover);
+    pop.querySelector(".ep-close").addEventListener("click", closePopover);
+    pop.querySelector(".ep-del").addEventListener("click", () => {
+      connectionsMod.deleteCalendarEvent(id);
+      closePopover();
+      render();
+    });
+  }
+
+  bodyEl.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-id]");
+    if (el) openPopover(el, el.dataset.id);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopover(); });
 
   window.APEX = window.APEX || {};
   window.APEX.loadCalendar = render;
