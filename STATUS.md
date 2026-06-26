@@ -30,7 +30,8 @@ more mature pipeline is ever needed again.
   and a draft refine that updates the learned writing style both work against live Groq.
 - **Settings page** — paste a Groq/Gemini key (saved only in this browser's `localStorage`), add/
   label/remove email accounts. No server, nothing uploaded.
-- **Calendar** — a real **Google-Calendar-style month grid** (prev/next/today, today circled),
+- **Calendar** — Google-Calendar-style, with a **Week view (Sun→Sat, default) + Month view toggle**
+  (prev/next/today, today circled, week view is an hour time-grid),
   events colored with the **exact 11 Google Calendar colors** (Lavender…Tomato). Settings has a
   **color → category** mapping: assign keywords to a color (e.g. green = "lunch, food"), and APEX
   picks the color when you say "add Lunch with Taylor". Uncategorized events use the default

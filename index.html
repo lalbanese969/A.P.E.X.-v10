@@ -561,6 +561,30 @@ body {
 }
 .cal-more { font-size: 10px; color: var(--color-text-dim); padding-left: 4px; }
 
+/* Week/Month toggle + body wrapper */
+.cal-modes { display: flex; gap: 4px; }
+.cal-mode-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line-soft); background: transparent; color: var(--color-text-dim); font-size: 12px; cursor: pointer; }
+.cal-mode-btn:hover { color: var(--color-text); }
+.cal-mode-btn.active { background: rgba(255, 122, 0, 0.12); border-color: var(--line); color: var(--color-orange); }
+#cal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* ----- WEEK view (Google-style time grid, Sun → Sat) ----- */
+.week-head { display: grid; grid-template-columns: 56px 1fr; flex-shrink: 0; }
+.week-head .wh-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+.week-day-head { text-align: center; padding: 6px 4px 8px; border-left: 1px solid var(--line-soft); }
+.week-day-head .wd-name { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--color-text-dim); }
+.week-day-head .wd-num { font-size: 18px; color: var(--color-text); margin-top: 3px; line-height: 1; }
+.week-day-head.today .wd-num { background: var(--color-orange); color: #160b00; font-weight: 700; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.week-body { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 56px 1fr; border-top: 1px solid var(--line-soft); }
+.week-hour-label { height: 44px; font-size: 10px; color: var(--color-text-dim); text-align: right; padding-right: 6px; transform: translateY(-6px); }
+.week-cols { display: grid; grid-template-columns: repeat(7, 1fr); }
+.week-col {
+  position: relative; border-left: 1px solid var(--line-soft);
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 43px, var(--line-soft) 43px, var(--line-soft) 44px);
+}
+.week-event { position: absolute; left: 2px; right: 2px; border-radius: 4px; color: #fff; font-size: 10px; line-height: 1.2; padding: 2px 5px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.week-event .we-time { opacity: 0.85; font-size: 9px; }
+
 /* ============================================================================
    [STYLE:LOGS-VIEW]  —  backend-call logs + scheduled timers (mock)
    ============================================================================ */
@@ -688,13 +712,16 @@ body {
     <!-- ===== CALENDAR VIEW — Google-style month grid (hidden until you click Calendar) ===== -->
     <div id="calendar-view" class="center-view" hidden>
       <div class="cal-toolbar">
-        <button class="cal-nav-btn" id="cal-prev" aria-label="Previous month">‹</button>
-        <button class="cal-nav-btn" id="cal-next" aria-label="Next month">›</button>
+        <button class="cal-nav-btn" id="cal-prev" aria-label="Previous">‹</button>
+        <button class="cal-nav-btn" id="cal-next" aria-label="Next">›</button>
         <div class="cal-title" id="cal-title">…</div>
+        <div class="cal-modes">
+          <button class="cal-mode-btn" id="cal-mode-week">Week</button>
+          <button class="cal-mode-btn" id="cal-mode-month">Month</button>
+        </div>
         <button class="cal-today-btn" id="cal-today">Today</button>
       </div>
-      <div class="cal-weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
-      <div class="cal-grid" id="cal-grid"></div>
+      <div id="cal-body"></div>
     </div>
 
     <!-- ===== LOGS VIEW — backend/automation log (hidden until you click Logs) ===== -->
@@ -1161,84 +1188,131 @@ import * as settingsMod from "./js/settings.js";
 
 
 /* ============================================================================
-   [JS:CALENDAR]  —  Google-style MONTH GRID (js/connections.js + js/settings.js)
+   [JS:CALENDAR]  —  Google-style calendar: WEEK (Sun→Sat, default) + MONTH views
    ============================================================================ */
 (function () {
-  const grid = document.getElementById("cal-grid");
+  const bodyEl = document.getElementById("cal-body");
   const titleEl = document.getElementById("cal-title");
-  let viewYear, viewMonth;   // which month is shown
+  let ref = new Date();        // any date inside the shown week/month
+  let mode = "week";           // "week" (default, Sun→Sat) or "month"
+  const HH = 44;               // pixels per hour in the week grid
 
   const MONTHS = ["January", "February", "March", "April", "May", "June",
                   "July", "August", "September", "October", "November", "December"];
+  const WD3 = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  function fmtTime(iso) {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
+  const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+  function fmtHour(h) {
+    if (h === 0) return "12 AM"; if (h === 12) return "12 PM";
+    return h < 12 ? `${h} AM` : `${h - 12} PM`;
+  }
+  function weekStartOf(d) { const s = new Date(d); s.setHours(0, 0, 0, 0); s.setDate(s.getDate() - s.getDay()); return s; }
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
 
-  function render() {
-    titleEl.textContent = `${MONTHS[viewMonth]} ${viewYear}`;
-    const events = connectionsMod.eventsForMonth(viewYear, viewMonth);
+  /* ---- WEEK view (Sunday → Saturday) ---- */
+  function renderWeek() {
+    const start = weekStartOf(ref);
+    const days = [...Array(7)].map((_, i) => { const x = new Date(start); x.setDate(start.getDate() + i); return x; });
+    const end = days[6];
+    const opt = (withYear) => ({ month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}) });
+    titleEl.textContent = `${start.toLocaleDateString([], opt(false))} – ${end.toLocaleDateString([], opt(true))}`;
 
-    // bucket events by day-of-month
-    const byDay = {};
-    events.forEach((e) => {
-      const d = new Date(e.start).getDate();
-      (byDay[d] = byDay[d] || []).push(e);
+    const startMs = start.getTime(), endMs = startMs + 7 * 86400000;
+    const evs = connectionsMod.allEvents().filter((e) => {
+      const t = new Date(e.start).getTime(); return t >= startMs && t < endMs;
     });
-
-    const first = new Date(viewYear, viewMonth, 1);
-    const startDow = first.getDay();                         // 0=Sun
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const daysInPrev = new Date(viewYear, viewMonth, 0).getDate();
     const today = new Date();
-    const isThisMonth = today.getFullYear() === viewYear && today.getMonth() === viewMonth;
 
-    let html = "";
-    for (let i = 0; i < 42; i++) {                            // 6 weeks
+    const headDays = days.map((dt) =>
+      `<div class="week-day-head ${sameDay(dt, today) ? "today" : ""}">
+         <div class="wd-name">${WD3[dt.getDay()]}</div><div class="wd-num">${dt.getDate()}</div>
+       </div>`).join("");
+
+    let times = ""; for (let h = 0; h < 24; h++) times += `<div class="week-hour-label">${fmtHour(h)}</div>`;
+
+    let cols = "";
+    for (let i = 0; i < 7; i++) {
+      let evHtml = "";
+      evs.filter((e) => sameDay(new Date(e.start), days[i])).forEach((e) => {
+        const s = new Date(e.start), en = new Date(e.end);
+        const top = (s.getHours() + s.getMinutes() / 60) * HH;
+        let dur = (en - s) / 3600000; if (!(dur > 0)) dur = 1;
+        const h = Math.max(dur * HH, 18);
+        const color = settingsMod.getColorById(e.colorId).hex;
+        evHtml += `<div class="week-event" style="top:${top}px;height:${h}px;background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">
+          <div>${esc(e.title)}</div><div class="we-time">${fmtTime(e.start)}</div></div>`;
+      });
+      cols += `<div class="week-col">${evHtml}</div>`;
+    }
+
+    bodyEl.innerHTML = `
+      <div class="week-head"><div></div><div class="wh-days">${headDays}</div></div>
+      <div class="week-body" id="week-scroll">
+        <div class="week-times">${times}</div>
+        <div class="week-cols">${cols}</div>
+      </div>`;
+    const sc = document.getElementById("week-scroll");
+    if (sc) sc.scrollTop = 7 * HH; // open around 7 AM
+  }
+
+  /* ---- MONTH view ---- */
+  function renderMonth() {
+    const y = ref.getFullYear(), m = ref.getMonth();
+    titleEl.textContent = `${MONTHS[m]} ${y}`;
+    const events = connectionsMod.eventsForMonth(y, m);
+    const byDay = {};
+    events.forEach((e) => { const d = new Date(e.start).getDate(); (byDay[d] = byDay[d] || []).push(e); });
+
+    const startDow = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const daysInPrev = new Date(y, m, 0).getDate();
+    const today = new Date();
+    const isThisMonth = today.getFullYear() === y && today.getMonth() === m;
+
+    let cells = "";
+    for (let i = 0; i < 42; i++) {
       const dayNum = i - startDow + 1;
       const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
       const shown = inMonth ? dayNum : (dayNum < 1 ? daysInPrev + dayNum : dayNum - daysInMonth);
       const isToday = inMonth && isThisMonth && dayNum === today.getDate();
-
       let evHtml = "";
       if (inMonth && byDay[dayNum]) {
-        const list = byDay[dayNum];
-        list.slice(0, 3).forEach((e) => {
+        byDay[dayNum].slice(0, 3).forEach((e) => {
           const color = settingsMod.getColorById(e.colorId).hex;
           evHtml += `<div class="cal-event" style="background:${color}" title="${esc(e.title)} · ${fmtTime(e.start)}">${esc(e.title)}</div>`;
         });
-        if (list.length > 3) evHtml += `<div class="cal-more">+${list.length - 3} more</div>`;
+        if (byDay[dayNum].length > 3) evHtml += `<div class="cal-more">+${byDay[dayNum].length - 3} more</div>`;
       }
-
-      html += `<div class="cal-cell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""}">
-        <span class="daynum">${shown}</span>${evHtml}
-      </div>`;
+      cells += `<div class="cal-cell ${inMonth ? "" : "dim"} ${isToday ? "today" : ""}"><span class="daynum">${shown}</span>${evHtml}</div>`;
     }
-    grid.innerHTML = html;
+    bodyEl.innerHTML = `
+      <div class="cal-weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+      <div class="cal-grid">${cells}</div>`;
   }
 
-  function loadCalendar() {
-    if (viewYear === undefined) { const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth(); }
-    try { render(); }
-    catch (e) { console.error(e); grid.innerHTML = '<div class="cal-more" style="padding:12px">Calendar error — see console.</div>'; }
+  function render() {
+    document.getElementById("cal-mode-week").classList.toggle("active", mode === "week");
+    document.getElementById("cal-mode-month").classList.toggle("active", mode === "month");
+    try { mode === "week" ? renderWeek() : renderMonth(); }
+    catch (e) { console.error(e); bodyEl.innerHTML = '<div class="cal-more" style="padding:12px">Calendar error — see console.</div>'; }
   }
+
   function step(delta) {
-    viewMonth += delta;
-    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
-    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    if (mode === "week") ref.setDate(ref.getDate() + delta * 7);
+    else ref.setMonth(ref.getMonth() + delta);
     render();
   }
 
   document.getElementById("cal-prev").addEventListener("click", () => step(-1));
   document.getElementById("cal-next").addEventListener("click", () => step(1));
-  document.getElementById("cal-today").addEventListener("click", () => {
-    const n = new Date(); viewYear = n.getFullYear(); viewMonth = n.getMonth(); render();
-  });
+  document.getElementById("cal-today").addEventListener("click", () => { ref = new Date(); render(); });
+  document.getElementById("cal-mode-week").addEventListener("click", () => { mode = "week"; render(); });
+  document.getElementById("cal-mode-month").addEventListener("click", () => { mode = "month"; render(); });
 
   window.APEX = window.APEX || {};
-  window.APEX.loadCalendar = loadCalendar;
+  window.APEX.loadCalendar = render;
 })();
 
 
