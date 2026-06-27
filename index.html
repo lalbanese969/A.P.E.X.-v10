@@ -746,7 +746,8 @@ body {
 
     <!-- ===== CHAT VIEW (default): messages + input ===== -->
     <div id="messages">
-      <div class="msg apex">A.P.E.X. v10 online. This is the main chat interface — type below to begin.</div>
+      <!-- static fallback only — [JS:CHAT] overwrites this with a random greeting on load -->
+      <div class="msg apex">A.P.E.X. is booting up, sir…</div>
     </div>
     <div id="input-bar">
       <input id="chat-input" type="text" placeholder="Message A.P.E.X.…" autocomplete="off" />
@@ -815,6 +816,7 @@ import * as memoryMod from "./js/memory.js";
 import * as pipelineMod from "./js/pipeline.js";
 import * as connectionsMod from "./js/connections.js";
 import * as settingsMod from "./js/settings.js";
+import { APEX_GREETINGS } from "./js/seedData.js";
 
 /* ============================================================================
    [JS:HONEYCOMB]  —  animated honeycomb background
@@ -1117,6 +1119,11 @@ import * as settingsMod from "./js/settings.js";
 
   let lastDraft = null;   // remembered so "make it shorter" can REFINE the prior draft
 
+  // [PERSONALITY] a different greeting every time — see js/seedData.js:APEX_GREETINGS
+  function randomGreeting() {
+    return APEX_GREETINGS[Math.floor(Math.random() * APEX_GREETINGS.length)];
+  }
+
   function addMessage(text, who) {
     const div = document.createElement("div");
     div.className = "msg " + who; // who = "user" or "apex"
@@ -1150,7 +1157,7 @@ import * as settingsMod from "./js/settings.js";
         body: card.querySelector(".dc-body").value,
         accountId: draft.account_id,
       });
-      addMessage("(saved draft — nothing sent)", "apex");
+      addMessage("(Saved, sir — nothing sent.)", "apex");
     });
     messages.appendChild(card);
     messages.scrollTop = messages.scrollHeight;
@@ -1161,7 +1168,7 @@ import * as settingsMod from "./js/settings.js";
     if (!text) return;
     addMessage(text, "user");
     input.value = "";
-    const thinking = addMessage("A.P.E.X. is thinking…", "apex");
+    const thinking = addMessage("Thinking, sir…", "apex");
 
     try {
       const data = await pipelineMod.handlePrompt(text, { priorDraft: lastDraft });
@@ -1173,17 +1180,20 @@ import * as settingsMod from "./js/settings.js";
       console.log("[A.P.E.X.]", { intent: data.intent, ai: data.ai_meta, memory: data.memory_packet });
     } catch (err) {
       console.error(err);
-      thinking.textContent = "(something went wrong — open DevTools console for details) you said: \"" + text + "\"";
+      thinking.textContent = "(something went sideways, sir — check DevTools console) you said: \"" + text + "\"";
     }
   }
 
   function resetChat() {
-    messages.innerHTML = '<div class="msg apex">New chat started. How can I help?</div>';
+    messages.innerHTML = `<div class="msg apex">${randomGreeting()}</div>`;
     lastDraft = null;
   }
 
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+  // [PERSONALITY] greet with a random line every time the page loads, not just on "New Chat"
+  messages.innerHTML = `<div class="msg apex">${randomGreeting()}</div>`;
 
   window.APEX = window.APEX || {};
   window.APEX.resetChat = resetChat;

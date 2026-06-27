@@ -43,6 +43,14 @@ more mature pipeline is ever needed again.
   is the settings surface for that future system.
 - Removed the last literal placeholder content in the app (the fake "Placeholder task" rows in
   the right sidebar) — now an honest "No tasks yet." empty state.
+- **Personality, v1** — APEX now always addresses the user as "sir" and has a witty/best-friend
+  voice (`js/pipeline.js:systemBase()`), with a pool of ~15 random greetings shown on page load and
+  "New Chat" (`js/seedData.js:APEX_GREETINGS`) so it's never the same line twice. **Important
+  isolation**: email drafts use a *separate* system prompt (not `systemBase()`) that explicitly
+  forbids calling the recipient "sir" or injecting jokes into the email body — APEX's personality
+  is how it talks to the user, never how it writes on his behalf to someone else. A bigger
+  personality/voice overhaul is still planned separately (prompt being drafted by another AI) and
+  may extend or replace this.
 - **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
 
 ## 📦 Archived (not deleted)

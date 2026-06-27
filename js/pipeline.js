@@ -53,14 +53,14 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
       const { draft, matches, ai } = await draftEmail(prompt, params, packet, null);
       result.draft = draft;
       result.email_matches = matches;
-      result.apex_response = "Here's a draft for you to review. Tell me what to change (tone, length, wording) and I'll adjust it.";
+      result.apex_response = "Drafted it for you, sir. Take a look and tell me what to tweak — tone, length, wording, anything.";
       aiMeta = ai;
     } else if (intent === "email_refine") {
       const learned = await learnStyle(prompt);
       const { draft, ai } = await draftEmail(prompt, params, packet, priorDraft);
       result.draft = draft;
       result.style_learned = learned;
-      result.apex_response = "Updated the draft and noted your preference for next time. Anything else to tweak?";
+      result.apex_response = "Tweaked it, sir — and I'll remember that for next time. Anything else?";
       aiMeta = ai;
     } else {
       const r = await answer(prompt, packet, {});
@@ -143,9 +143,15 @@ async function draftEmail(prompt, params, packet, priorDraft) {
   const subject = pickSubject(ref, priorDraft);
   const style = memory.writingStyleBrief();
 
-  const system = systemBase() +
-    "\n\nYou are drafting an email on the user's behalf. Write ONLY the email body " +
-    "(no subject line, no commentary). Writing style to follow: " + style +
+  // NOTE: deliberately does NOT use systemBase() here. APEX's own witty/"sir" voice
+  // (see systemBase()) is how it talks to the USER — it must never leak into an email
+  // body addressed to someone else. This prompt is isolated on purpose.
+  const system =
+    "You are A.P.E.X., drafting an email on the user's behalf to send to SOMEONE ELSE. " +
+    "This email is addressed to the recipient, not to the user — do not call the recipient " +
+    "\"sir\", and do not inject jokes or personality into the email body itself. Write ONLY the " +
+    "email body (no subject line, no commentary), following the writing style below.\n\n" +
+    "Writing style to follow: " + style +
     "\n\n" + contextBlock(packet, { emails: matches });
 
   let instruction = prompt;
@@ -222,7 +228,7 @@ function addEvent(prompt) {
   const colorNote = isDefault ? `${color.name} — default/Other` : color.name;
   return {
     event: ev,
-    message: `Added "${title}" to your calendar — ${dateLabel} at ${timeLabel} · color ${colorNote}.`,
+    message: `Done, sir — "${title}" is on the calendar for ${dateLabel} at ${timeLabel} (color: ${colorNote}).`,
   };
 }
 
@@ -289,12 +295,18 @@ function localIso(d) {
 
 /* ---- prompt building blocks -------------------------------------------------- */
 
+// APEX's personality when talking DIRECTLY TO THE USER (chat, calendar/email
+// summaries, confirmations). Deliberately NOT used for drafting emails to other
+// people — see the isolated prompt in draftEmail() — "sir" and the wit are how
+// APEX talks to its own user, never how it talks to someone else on his behalf.
 function systemBase() {
-  const p = memory.profileSummary();
-  const tone = p.tone || "warm-professional";
-  return `You are A.P.E.X. (Adaptive Personal Executive Xpert), the user's personal assistant. ` +
-    `Speak as one assistant, ${tone} in tone. Be concise and genuinely helpful. ` +
-    `Use the CONTEXT below when relevant; do not invent facts that aren't given.`;
+  return `You are A.P.E.X. (Adaptive Personal Executive Xpert) — the user's personal AI ` +
+    `assistant, and basically his best friend. Always address him as "sir", woven in ` +
+    `naturally (greetings, acknowledgments, sign-offs) — don't force it into every single ` +
+    `sentence. Your voice is witty, warm, a little playful and confident, like a sharp friend ` +
+    `who also happens to be a world-class executive assistant. Be genuinely funny AND ` +
+    `genuinely useful — never sacrifice usefulness for the joke. Stay concise. Use the CONTEXT ` +
+    `below when relevant; never invent facts that aren't given.`;
 }
 
 function contextBlock(packet, { calendar, emails } = {}) {
@@ -316,10 +328,10 @@ function contextBlock(packet, { calendar, emails } = {}) {
 }
 
 function memoryOnlyFallback(packet, err) {
-  const base = "(A.P.E.X. — no AI brain reachable right now, showing memory only) ";
+  const base = "(A.P.E.X., running on fumes, sir — no AI brain reachable right now) ";
   if (packet.memory_needed && packet.loaded_records?.length) {
     const names = packet.loaded_records.map((r) => r.display_name).join(", ");
-    return base + `Relevant memory: ${names}. (Add a Groq or Gemini key in Settings for full answers.)`;
+    return base + `Here's what I remember: ${names}. Add a Groq or Gemini key in Settings and I'll be properly useful again.`;
   }
-  return base + "I couldn't reach a model. Add a Groq or Gemini key in Settings, then try again.";
+  return base + "Add a Groq or Gemini key in Settings, sir, and we'll be back in business.";
 }
