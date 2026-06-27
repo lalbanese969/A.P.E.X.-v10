@@ -132,7 +132,10 @@ function localDateStr(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/* ---- backend logs + automation timers (mock, for the Logs page) ------------- */
+/* ---- backend logs + automation timers ---------------------------------------
+   Timers are configuration ONLY right now — there is no scheduler/executor
+   wired up yet, so enabling a timer here doesn't make anything run. This is the
+   settings surface for the automation system described in BUILD_PLAN.md. */
 
 export function listBackendLogs() {
   return getItem("logs.backend", []);
@@ -140,4 +143,69 @@ export function listBackendLogs() {
 
 export function listTimers() {
   return getItem("automation.timers", []);
+}
+
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function fmtTimeOfDay(hhmm) {
+  const [h, m] = (hhmm || "00:00").split(":").map(Number);
+  const d = new Date(); d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/** Human-readable description of a timer's schedule (display only). */
+export function describeSchedule(t) {
+  if (t.type === "daily") return `Daily · ${fmtTimeOfDay(t.time)}`;
+  if (t.type === "weekly") return `Weekly · ${WEEKDAY_NAMES[t.day]} · ${fmtTimeOfDay(t.time)}`;
+  if (t.type === "interval") return `Every ${t.intervalHours} hour${t.intervalHours === 1 ? "" : "s"}`;
+  return "Custom";
+}
+
+/** Best-effort "next run" estimate for display — cosmetic only, nothing actually schedules this. */
+export function estimateNext(t) {
+  const now = new Date();
+  if (t.type === "interval") {
+    const next = new Date(now.getTime() + (t.intervalHours || 1) * 3600000);
+    return `~${next.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
+  }
+  const [h, m] = (t.time || "00:00").split(":").map(Number);
+  const next = new Date(now);
+  next.setHours(h, m, 0, 0);
+  if (t.type === "weekly") {
+    const delta = ((t.day ?? 0) - next.getDay() + 7) % 7;
+    next.setDate(next.getDate() + delta);
+    if (delta === 0 && next <= now) next.setDate(next.getDate() + 7);
+  } else if (next <= now) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
+export function addTimer({ name, type, time, day, intervalHours }) {
+  const timers = listTimers();
+  const t = {
+    id: `timer_${Date.now()}`, name: name || "New timer", type: type || "daily",
+    time: time || "08:00", day: day !== undefined ? Number(day) : 0,
+    intervalHours: intervalHours ? Number(intervalHours) : 6, enabled: true,
+  };
+  timers.push(t);
+  setItem("automation.timers", timers);
+  return t;
+}
+
+export function updateTimer(id, patch) {
+  const timers = listTimers();
+  const t = timers.find((x) => x.id === id);
+  if (t) Object.assign(t, patch);
+  setItem("automation.timers", timers);
+  return t;
+}
+
+export function toggleTimer(id) {
+  const t = listTimers().find((x) => x.id === id);
+  if (t) updateTimer(id, { enabled: !t.enabled });
+}
+
+export function removeTimer(id) {
+  setItem("automation.timers", listTimers().filter((x) => x.id !== id));
 }

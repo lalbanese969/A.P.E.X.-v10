@@ -379,6 +379,7 @@ body {
   border: 1px solid var(--color-icon);
   flex-shrink: 0;
 }
+.task-empty { font-size: 12px; color: var(--color-text-dim); padding: 4px 2px; }
 
 /* ============================================================================
    [STYLE:VIEWS]  —  center view switcher (chat / calendar / email) + draft card
@@ -622,12 +623,37 @@ body {
 .log-status.ok { background: rgba(68, 208, 122, 0.15); color: #5cd98a; }
 .log-status.skipped { background: rgba(246, 191, 38, 0.15); color: #f6bf26; }
 .log-status.error { background: rgba(208, 68, 68, 0.18); color: #ff7a7a; }
-.timer-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(255, 255, 255, 0.02); margin-bottom: 7px; }
+.timer-row { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(255, 255, 255, 0.02); margin-bottom: 7px; }
 .timer-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
 .timer-sched { font-size: 11px; color: var(--color-text-dim); margin-top: 2px; }
-.timer-toggle { margin-left: auto; font-size: 10px; padding: 3px 10px; border-radius: 999px; }
+.timer-toggle {
+  font-size: 10px; padding: 3px 10px; border-radius: 999px; border: none; cursor: pointer;
+  font-family: inherit; letter-spacing: 0.5px;
+}
 .timer-toggle.on { background: rgba(68, 208, 122, 0.15); color: #5cd98a; }
 .timer-toggle.off { background: rgba(255, 255, 255, 0.06); color: var(--color-text-dim); }
+.timer-actions { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+.timer-del {
+  width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(208, 68, 68, 0.4);
+  background: none; color: #ff8a8a; cursor: pointer; font-size: 13px; line-height: 1;
+}
+.timer-del:hover { background: rgba(208, 68, 68, 0.12); }
+.add-timer { border-top: 1px solid var(--line-soft); padding-top: 10px; margin-top: 4px; }
+.add-timer-grid { display: grid; grid-template-columns: 1.3fr 1fr 0.9fr 0.9fr auto; gap: 8px; align-items: end; }
+.add-timer label { display: block; font-size: 10px; color: var(--color-text-dim); margin-bottom: 3px; }
+.add-timer input, .add-timer select {
+  width: 100%; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line-soft);
+  background: rgba(15, 15, 17, 0.9); color: var(--color-text); font-size: 12px; outline: none; font-family: inherit;
+}
+.add-timer-btn {
+  padding: 7px 14px; border-radius: 7px; border: 1px solid var(--line); background: rgba(255, 122, 0, 0.14);
+  color: var(--color-orange); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.add-timer-btn:hover { background: rgba(255, 122, 0, 0.24); }
+.automation-warn {
+  font-size: 11px; color: var(--color-orange-soft); background: rgba(255, 122, 0, 0.07);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; margin-bottom: 12px;
+}
 
 /* ============================================================================
    [STYLE:COLOR-CATEGORIES]  —  Google-color -> category rows in Settings
@@ -770,9 +796,8 @@ body {
   <aside id="sidebar-right" class="panel">
     <div class="panel-title">Tasks</div>
     <div class="task-list">
-      <div class="task-item"><span class="checkbox"></span><span>Placeholder task one</span></div>
-      <div class="task-item"><span class="checkbox"></span><span>Placeholder task two</span></div>
-      <div class="task-item"><span class="checkbox"></span><span>Placeholder task three</span></div>
+      <!-- No task feature built yet — left as a clean empty state on purpose. -->
+      <div class="task-empty">No tasks yet.</div>
     </div>
   </aside>
 
@@ -1407,7 +1432,11 @@ import * as settingsMod from "./js/settings.js";
 
 
 /* ============================================================================
-   [JS:LOGS]  —  backend-call logs + scheduled timers (mock, js/connections.js)
+   [JS:LOGS]  —  backend-call log (mock data) + a REAL settings UI for defining
+   scheduled timers. Timers you add here are saved (localStorage via
+   js/connections.js) but NOTHING executes them yet — there is no scheduler/
+   automation engine wired up. This is the configuration surface for that
+   future system, built ahead of the execution logic on purpose.
    ============================================================================ */
 (function () {
   const body = document.getElementById("logs-body");
@@ -1420,40 +1449,105 @@ import * as settingsMod from "./js/settings.js";
     return Math.round(diff / 86400) + "d ago";
   }
 
+  function timerRow(t) {
+    return `
+      <div class="timer-row" data-id="${esc(t.id)}">
+        <div>
+          <div class="timer-name">${esc(t.name)}</div>
+          <div class="timer-sched">${esc(connectionsMod.describeSchedule(t))} · next: ${esc(connectionsMod.estimateNext(t))}</div>
+        </div>
+        <div class="timer-actions">
+          <button class="timer-toggle ${t.enabled ? "on" : "off"}" data-action="toggle">${t.enabled ? "ENABLED" : "OFF"}</button>
+          <button class="timer-del" data-action="delete" title="Delete timer">✕</button>
+        </div>
+      </div>`;
+  }
+
+  function addTimerFormHtml() {
+    return `
+      <div class="add-timer">
+        <div class="logs-note" style="margin-bottom:8px;">Add a scheduled timer (config only — won't run anything yet):</div>
+        <div class="add-timer-grid">
+          <div><label>Name</label><input id="nt-name" placeholder="e.g. Check inbox"></div>
+          <div><label>Type</label>
+            <select id="nt-type">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="interval">Every N hours</option>
+            </select>
+          </div>
+          <div id="nt-field2"><label>Time</label><input id="nt-time" type="time" value="08:00"></div>
+          <div id="nt-field3"><label>&nbsp;</label></div>
+          <button class="add-timer-btn" id="nt-add">Add</button>
+        </div>
+      </div>`;
+  }
+
+  function updateAddFormFields() {
+    const type = document.getElementById("nt-type").value;
+    const f2 = document.getElementById("nt-field2"), f3 = document.getElementById("nt-field3");
+    if (type === "weekly") {
+      f2.innerHTML = `<label>Day</label><select id="nt-day">
+        <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+        <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+      </select>`;
+      f3.innerHTML = `<label>Time</label><input id="nt-time" type="time" value="08:00">`;
+    } else if (type === "interval") {
+      f2.innerHTML = `<label>Every (hours)</label><input id="nt-interval" type="number" min="1" max="168" value="6">`;
+      f3.innerHTML = `<label>&nbsp;</label>`;
+    } else { // daily
+      f2.innerHTML = `<label>Time</label><input id="nt-time" type="time" value="08:00">`;
+      f3.innerHTML = `<label>&nbsp;</label>`;
+    }
+  }
+
   function loadLogs() {
     try {
       const timers = connectionsMod.listTimers();
       const logs = connectionsMod.listBackendLogs();
 
-      const timerHtml = timers.map((t) => `
-        <div class="timer-row">
-          <div>
-            <div class="timer-name">${esc(t.name)}</div>
-            <div class="timer-sched">${esc(t.schedule)} · next: ${esc(t.next)}</div>
-          </div>
-          <span class="timer-toggle ${t.enabled ? "on" : "off"}">${t.enabled ? "ENABLED" : "OFF"}</span>
-        </div>`).join("");
-
-      const logHtml = logs.map((l) => `
-        <div class="log-row">
-          <div class="log-time">${relTime(l.time)}</div>
-          <div class="log-body">
-            <div class="log-action">${esc(l.action)}</div>
-            <div class="log-detail">${esc(l.detail)}</div>
-          </div>
-          <div class="log-meta">
-            <span class="log-src">${esc(l.source)}</span>
-            <span class="log-status ${esc(l.status)}">${esc(l.status)}</span>
-          </div>
-        </div>`).join("");
-
       body.innerHTML = `
         <div class="logs-section-title">Scheduled timers</div>
-        <div class="logs-note">For future automation — APEX will run these on a schedule without you opening the UI. (Mock for now.)</div>
-        ${timerHtml}
+        <div class="automation-warn">These timers are saved as configuration only. There is no automation engine running yet, so enabling a timer here does not make anything execute — this is the settings surface for that future system.</div>
+        <div id="timer-list">${timers.map(timerRow).join("") || '<div class="logs-note">No timers yet.</div>'}</div>
+        ${addTimerFormHtml()}
+
         <div class="logs-section-title">Recent backend activity</div>
         <div class="logs-note">Logs of calls APEX makes when it runs on its own (triggers, automations, APIs) — what it did and when. (Mock for now.)</div>
-        ${logHtml}`;
+        ${logs.map((l) => `
+          <div class="log-row">
+            <div class="log-time">${relTime(l.time)}</div>
+            <div class="log-body">
+              <div class="log-action">${esc(l.action)}</div>
+              <div class="log-detail">${esc(l.detail)}</div>
+            </div>
+            <div class="log-meta">
+              <span class="log-src">${esc(l.source)}</span>
+              <span class="log-status ${esc(l.status)}">${esc(l.status)}</span>
+            </div>
+          </div>`).join("")}`;
+
+      document.getElementById("nt-type").addEventListener("change", updateAddFormFields);
+      document.getElementById("nt-add").addEventListener("click", () => {
+        const name = document.getElementById("nt-name").value.trim();
+        if (!name) { document.getElementById("nt-name").focus(); return; }
+        const type = document.getElementById("nt-type").value;
+        connectionsMod.addTimer({
+          name, type,
+          time: document.getElementById("nt-time")?.value,
+          day: document.getElementById("nt-day")?.value,
+          intervalHours: document.getElementById("nt-interval")?.value,
+        });
+        loadLogs();
+      });
+      document.getElementById("timer-list").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const id = btn.closest(".timer-row").dataset.id;
+        if (btn.dataset.action === "toggle") connectionsMod.toggleTimer(id);
+        if (btn.dataset.action === "delete") connectionsMod.removeTimer(id);
+        loadLogs();
+      });
     } catch (e) {
       console.error(e);
       body.innerHTML = '<div class="logs-note">Logs error — see console.</div>';

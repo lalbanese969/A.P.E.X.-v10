@@ -220,9 +220,11 @@ export function buildSeedLogs() {
   ];
 }
 
+/* Structured timer definitions — config only, nothing executes these yet.
+   type: "daily" (time) | "weekly" (day 0=Sun..6=Sat + time) | "interval" (intervalHours) */
 export const SEED_TIMERS = [
-  { name: "Morning briefing",     schedule: "Daily · 8:00 AM",   next: "tomorrow 8:00 AM", enabled: true },
-  { name: "Stale email follow-up", schedule: "Every 6 hours",     next: "in ~2 hours",      enabled: true },
-  { name: "Weekly review",        schedule: "Sundays · 6:00 PM", next: "Sunday 6:00 PM",   enabled: true },
-  { name: "Evening lights",       schedule: "Daily · sunset",    next: "today ~8:14 PM",   enabled: false },
+  { id: "timer_morning",  name: "Morning briefing",      type: "daily",    time: "08:00",            enabled: true  },
+  { id: "timer_stale",    name: "Stale email follow-up", type: "interval", intervalHours: 6,          enabled: true  },
+  { id: "timer_weekly",   name: "Weekly review",         type: "weekly",   day: 0, time: "18:00",     enabled: true  },
+  { id: "timer_lights",   name: "Evening lights",        type: "daily",    time: "20:00",             enabled: false },
 ];

@@ -37,8 +37,12 @@ more mature pipeline is ever needed again.
   picks the color when you say "add Lunch with Taylor". Uncategorized events use the default
   "Other" blue (Peacock #039BE5, changeable). New `calendar_add` intent creates events
   (deterministic, no AI call) into local mock data.
-- **Logs page** — mock "Scheduled timers" + "Recent backend activity" feed. Placeholder for the
-  future automation system (APEX running on triggers/timers without the UI, logging what it did).
+- **Logs page** — "Recent backend activity" feed is still mock display data, but **Scheduled
+  timers is now a real settings UI**: add/edit/toggle/delete timers (daily/weekly/every-N-hours),
+  stored in `localStorage`. **Config only — no automation engine runs them yet**, by design; this
+  is the settings surface for that future system.
+- Removed the last literal placeholder content in the app (the fake "Placeholder task" rows in
+  the right sidebar) — now an honest "No tasks yet." empty state.
 - **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
 
 ## 📦 Archived (not deleted)
