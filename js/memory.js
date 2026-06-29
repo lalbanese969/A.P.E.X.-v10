@@ -17,7 +17,9 @@
    ============================================================================ */
 
 import { getItem, setItem, ensureSeeded, appendLog } from "./storage.js";
-import { SEED_CATALOG, SEED_PEOPLE, SEED_PROJECTS, SEED_PROFILE, SEED_WRITING_STYLE } from "./seedData.js";
+import { SEED_CATALOG, SEED_PEOPLE, SEED_PROJECTS, SEED_PROFILE, SEED_WRITING_STYLE, SEED_USER } from "./seedData.js";
+import { getSettings } from "./settings.js";
+import { runTask } from "./aiCenter.js";
 
 /* ---- seed once on first load -------------------------------------------- */
 ensureSeeded("memory.catalog", SEED_CATALOG);
@@ -25,6 +27,7 @@ for (const [id, rec] of Object.entries(SEED_PEOPLE)) ensureSeeded(`memory.people
 for (const [id, rec] of Object.entries(SEED_PROJECTS)) ensureSeeded(`memory.projects.${id}`, rec);
 ensureSeeded("memory.profile", SEED_PROFILE);
 ensureSeeded("memory.writingStyle", SEED_WRITING_STYLE);
+ensureSeeded("memory.user", SEED_USER);
 
 /* ---- catalog -------------------------------------------------------------- */
 
@@ -299,4 +302,174 @@ export function reviewInteraction(userPrompt, assistantResponse = "") {
     });
   }
   return { should_write: candidates.length > 0, candidates };
+}
+
+/* ============================================================================
+   MEMORY WRITING v1 — actually saves facts (silent, background).
+   Flow: learnFromInteraction() -> extractFacts() [Groq, gated] -> resolve target
+   -> applyFact() [safe append-only / set-if-empty]. Every applied change is logged
+   to apex.memory.writes so undoLastWrite() can revert it. Nothing is shown in the UI.
+   ============================================================================ */
+
+const USER_KEY = "memory.user";
+
+// attribute -> { record field, op }. Everything ambiguous/descriptive routes to
+// important_notes (safe append). Only birthday is a scalar (set-if-empty).
+const ATTR_FIELD = {
+  like:           { field: "likes",           op: "array" },
+  dislike:        { field: "dislikes",        op: "array" },
+  favorite_food:  { field: "favorite_foods",  op: "array" },
+  hobby:          { field: "hobbies",         op: "array" },
+  gift_idea:      { field: "gift_ideas",      op: "array" },
+  important_date: { field: "important_dates", op: "array" },
+  birthday:       { field: "birthday",        op: "scalar" },
+  note:           { field: "important_notes", op: "array" },
+  preference:     { field: "important_notes", op: "array" },
+  name_part:      { field: "important_notes", op: "array" },
+  location:       { field: "important_notes", op: "array" },
+};
+
+const nowIso = () => new Date().toISOString();
+const today = () => new Date().toISOString().slice(0, 10);
+const factValueString = (v) => (typeof v === "string" ? v : (v && v.value) ? String(v.value) : JSON.stringify(v)).trim();
+const displayName = (rec) => rec.display_name || (rec.type === "user" ? "you" : "someone");
+
+/** Compact string of known facts about the USER — injected into every prompt's context. */
+export function userBrief() {
+  const u = getItem(USER_KEY, SEED_USER);
+  const parts = [];
+  if (u.birthday) parts.push(`birthday ${u.birthday}`);
+  if (u.likes?.length) parts.push(`likes: ${u.likes.join(", ")}`);
+  if (u.dislikes?.length) parts.push(`dislikes: ${u.dislikes.join(", ")}`);
+  if (u.favorite_foods?.length) parts.push(`favorite foods: ${u.favorite_foods.join(", ")}`);
+  if (u.hobbies?.length) parts.push(`hobbies: ${u.hobbies.join(", ")}`);
+  if (u.important_notes?.length) parts.push(`notes: ${u.important_notes.join("; ")}`);
+  return parts.length ? parts.join(" | ") : "";
+}
+
+function resolveTargetKey(fact) {
+  const t = String(fact.target || "").trim().toLowerCase();
+  if (fact.targetType === "user" || !t || ["user", "me", "myself", "i"].includes(t)) return USER_KEY;
+  const cands = resolve(fact.target);
+  if (cands.length && cands[0].card.type === "person") return `memory.people.${cands[0].card.id}`;
+  return null; // unknown person — not auto-created in v1
+}
+
+/** Apply one fact to the record at `recordKey`. Returns a summary string if it
+    wrote something, else null. Append-only for arrays, set-if-empty for scalars. */
+export function applyFact(recordKey, fact) {
+  const map = ATTR_FIELD[fact.attribute];
+  if (!map) return null;
+  const record = getItem(recordKey, null);
+  if (!record) return null;
+  const val = factValueString(fact.value);
+  if (!val) return null;
+
+  if (map.op === "array") {
+    record[map.field] = record[map.field] || [];
+    const dup = record[map.field].some((x) => factValueString(x).toLowerCase() === val.toLowerCase());
+    if (dup) return null;
+    record[map.field].push(val);
+    record.last_updated = today();
+    setItem(recordKey, record);
+    appendLog("memory.writes", { ts: nowIso(), recordKey, field: map.field, op: "array_append", value: val, prevValue: null });
+    return `${displayName(record)} · ${map.field} += ${val}`;
+  }
+
+  // scalar: set only if empty; never overwrite a conflicting value
+  const cur = record[map.field];
+  if (cur && String(cur).toLowerCase() === val.toLowerCase()) return null;
+  if (cur) {
+    appendLog("memory.writes", { ts: nowIso(), recordKey, field: map.field, op: "conflict", value: val, prevValue: cur, applied: false });
+    return null;
+  }
+  record[map.field] = val;
+  record.last_updated = today();
+  setItem(recordKey, record);
+  appendLog("memory.writes", { ts: nowIso(), recordKey, field: map.field, op: "scalar_set", value: val, prevValue: cur ?? null });
+  return `${displayName(record)} · ${map.field} = ${val}`;
+}
+
+/** Cheap gate so the extraction AI call only fires when there's plausibly a fact. */
+function hasFactSignal(p) {
+  const t = (p || "").toLowerCase();
+  return /\b(remember|don'?t forget|note that|for the record|fyi|keep in mind|by the way)\b/.test(t)
+    || /\b(my|his|her|their|our)\b[^.?!]*\b(is|are|was|likes?|loves?|hates?|prefers?|birthday|allerg|favou?rite|name|lives?)\b/.test(t)
+    || /\b\w+\s+(likes|loves|hates|prefers|is allergic)\b/.test(t)
+    || /\bbirthday\b/.test(t)
+    || /\b(sister|brother|mom|mother|dad|father|friend|coworker|colleague|boss|girlfriend|boyfriend|wife|husband|partner|son|daughter)\b/.test(t);
+}
+
+function stripFences(s) {
+  return String(s || "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+}
+
+/** Ask Groq (fast model, JSON) to extract durable facts. Returns [] if gated out / on any error. */
+export async function extractFacts(userPrompt, apexResponse = "") {
+  if (!hasFactSignal(userPrompt)) return [];
+  const sys =
+    "You extract durable personal facts worth remembering from a chat, as JSON. " +
+    "Return ONLY a JSON object: {\"facts\":[{\"target\":string,\"targetType\":\"user\"|\"person\"," +
+    "\"attribute\":string,\"value\":string,\"confidence\":number}]}. " +
+    "targetType is \"user\" if the fact is about the user himself, else \"person\". " +
+    "target is the person's name, or \"user\". attribute is ONE of: like, dislike, favorite_food, " +
+    "hobby, gift_idea, note, preference, birthday, important_date, name_part, location. " +
+    "value is a short string. confidence is 0-1. Only include facts EXPLICITLY stated by the user. " +
+    "If there are none, return {\"facts\":[]}.";
+  const user = `User said: "${userPrompt}"\nAssistant replied: "${apexResponse}"\nExtract the facts as JSON.`;
+  try {
+    const model = getSettings().groqFastModel;
+    const r = await runTask("extract_memory", [
+      { role: "system", content: sys }, { role: "user", content: user },
+    ], { model, jsonMode: true });
+    const parsed = JSON.parse(stripFences(r.text));
+    const facts = Array.isArray(parsed) ? parsed : (parsed.facts || []);
+    return facts.filter((f) => f && f.attribute && f.value);
+  } catch (e) {
+    return [];
+  }
+}
+
+/** Orchestrate: extract -> resolve -> apply. Silent. Returns {saved, proposals}. */
+export async function learnFromInteraction(userPrompt, apexResponse = "") {
+  reviewInteraction(userPrompt, apexResponse); // keep the cheap regex proposal log too
+  let facts = [];
+  try { facts = await extractFacts(userPrompt, apexResponse); } catch (e) { facts = []; }
+
+  const saved = [], proposals = [];
+  for (const f of facts) {
+    if ((f.confidence ?? 1) < 0.6) { proposals.push(f); continue; }
+    const key = resolveTargetKey(f);
+    if (!key) {
+      appendLog("logs.memoryWrite", { timestamp: nowIso(), status: "proposed_unknown_target", fact: f });
+      proposals.push(f);
+      continue;
+    }
+    const summary = applyFact(key, f);
+    if (summary) saved.push(summary);
+  }
+  return { saved, proposals };
+}
+
+/** Revert the most recent applied write (internal safety; no UI). */
+export function undoLastWrite() {
+  const writes = getItem("memory.writes", []);
+  for (let i = writes.length - 1; i >= 0; i--) {
+    const w = writes[i];
+    if (w.op === "conflict") continue;
+    const record = getItem(w.recordKey, null);
+    if (record) {
+      if (w.op === "array_append") {
+        record[w.field] = (record[w.field] || []).filter(
+          (x) => factValueString(x).toLowerCase() !== factValueString(w.value).toLowerCase());
+      } else if (w.op === "scalar_set") {
+        record[w.field] = w.prevValue;
+      }
+      setItem(w.recordKey, record);
+    }
+    writes.splice(i, 1);
+    setItem("memory.writes", writes);
+    return w;
+  }
+  return null;
 }

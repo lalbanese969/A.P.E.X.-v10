@@ -20,8 +20,16 @@ more mature pipeline is ever needed again.
 ## ✅ Working now
 - **UI** — orange/black theme, animated honeycomb, chat / calendar / email / settings views.
   Unchanged visually by the migration.
-- **Memory** (`js/memory.js`) — catalog + resolver + packet builder, ported 1:1 from the Python
-  version and verified to produce identical results on the same test prompts.
+- **Memory** (`js/memory.js`) — catalog + resolver + packet builder (read path), plus **Memory
+  Writing v1**: APEX now actually **saves facts** silently in the background. After each turn,
+  a gated Groq extraction pass (fast model, JSON mode; only fires when the message plausibly
+  contains a fact, so normal chat costs nothing) pulls structured facts and writes them — **safely**:
+  append-only to lists with dedup, scalars set-only-if-empty (never overwrites a conflicting value),
+  every write logged to `apex.memory.writes` and reversible via `undoLastWrite()`. New facts about
+  *the user* land in a new `user` self-record (`apex.memory.user`), injected into context every turn.
+  Unknown people are logged as proposals, not auto-created (catalog stays safe). No UI/confirmation —
+  fully background. (Verified: save/dedup/conflict/undo all pass; live extraction needs a valid Groq
+  key in Settings.)
 - **AI Center** (`js/aiCenter.js`) — **Groq** is the primary brain (called directly from the
   browser via `fetch()`, no server). **Gemini** is the fallback. No local Ollama (mixed-content
   blocking on HTTPS pages rules it out for the browser version).

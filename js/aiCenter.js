@@ -21,24 +21,26 @@ const GEMINI_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models
 
 export class AIError extends Error {}
 
-/** messages: [{role: "system"|"user"|"assistant", content: "..."}] */
-export async function runTask(taskType, messages) {
+/** messages: [{role: "system"|"user"|"assistant", content: "..."}]
+    opts: { model?: override the provider's model, jsonMode?: ask for strict JSON output } */
+export async function runTask(taskType, messages, opts = {}) {
   const settings = getSettings();
 
   if (settings.groqApiKey) {
+    const model = opts.model || settings.groqModel;
     try {
-      const text = await callGroq(messages, settings.groqModel, settings.groqApiKey);
-      logUsage(taskType, "groq", settings.groqModel, true);
-      return { text, provider: "groq", model: settings.groqModel };
+      const text = await callGroq(messages, model, settings.groqApiKey, opts.jsonMode);
+      logUsage(taskType, "groq", model, true);
+      return { text, provider: "groq", model };
     } catch (e) {
-      logUsage(taskType, "groq", settings.groqModel, false, e.message);
+      logUsage(taskType, "groq", model, false, e.message);
       // fall through to Gemini
     }
   }
 
   if (settings.geminiApiKey) {
     try {
-      const text = await callGemini(messages, settings.geminiModel, settings.geminiApiKey);
+      const text = await callGemini(messages, settings.geminiModel, settings.geminiApiKey, opts.jsonMode);
       logUsage(taskType, "gemini", settings.geminiModel, true);
       return { text, provider: "gemini", model: settings.geminiModel };
     } catch (e) {
@@ -49,11 +51,13 @@ export async function runTask(taskType, messages) {
   throw new AIError("No AI provider reachable. Add a Groq (or Gemini) API key in Settings.");
 }
 
-async function callGroq(messages, model, apiKey) {
+async function callGroq(messages, model, apiKey, jsonMode) {
+  const payload = { model, messages };
+  if (jsonMode) payload.response_format = { type: "json_object" };
   const res = await fetch(GROQ_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new AIError(`Groq HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const body = await res.json();
@@ -73,10 +77,11 @@ function toGeminiContents(messages) {
   return { contents, systemInstruction };
 }
 
-async function callGemini(messages, model, apiKey) {
+async function callGemini(messages, model, apiKey, jsonMode) {
   const { contents, systemInstruction } = toGeminiContents(messages);
   const payload = { contents };
   if (systemInstruction) payload.systemInstruction = systemInstruction;
+  if (jsonMode) payload.generationConfig = { responseMimeType: "application/json" };
 
   const res = await fetch(`${GEMINI_URL_BASE}/${model}:generateContent?key=${apiKey}`, {
     method: "POST",

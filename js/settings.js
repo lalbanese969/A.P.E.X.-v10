@@ -21,6 +21,8 @@ const DEFAULT_SETTINGS = {
   groqApiKey: "",
   geminiApiKey: "",
   groqModel: "llama-3.3-70b-versatile",
+  // cheaper/faster Groq model for internal background tasks (e.g. memory extraction)
+  groqFastModel: "llama-3.1-8b-instant",
   geminiModel: "gemini-2.0-flash",
 };
 ensureSeeded("settings", DEFAULT_SETTINGS);

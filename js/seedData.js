@@ -89,6 +89,23 @@ export const SEED_PROFILE = {
   tone: { value: "witty, warm, best-friend energy — always addresses the user as 'sir'", confidence: 0.2, evidence: [] },
 };
 
+/* The USER's own self-record — facts about the user himself (not another person).
+   This is where "remember that I…" facts land. Starts mostly empty; the memory
+   writer fills it over time. Always injected into context so APEX knows it. */
+export const SEED_USER = {
+  id: "user_self",
+  type: "user",
+  display_name: "the user",
+  preferences: {},
+  likes: [],
+  dislikes: [],
+  favorite_foods: [],
+  hobbies: [],
+  important_notes: [],
+  important_dates: [],
+  birthday: null,
+};
+
 /* ----------------------------------------------------------------------------
    PERSONALITY — random greetings shown in chat (on load + "New Chat"), so it's
    never the same line twice in a row. Always addresses the user as "sir".

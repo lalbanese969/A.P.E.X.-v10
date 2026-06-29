@@ -76,7 +76,9 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
   }
 
   result.ai_meta = aiMeta;
-  memory.reviewInteraction(prompt, result.apex_response || "");
+  // Learn from this interaction in the BACKGROUND (silent, fire-and-forget) so it
+  // never delays the reply and shows nothing in the UI. See memory.learnFromInteraction.
+  memory.learnFromInteraction(prompt, result.apex_response || "").catch(() => {});
   return result;
 }
 
@@ -128,7 +130,7 @@ function searchQuery(prompt) {
 /* ---- answering (chat / calendar / email_search) -------------------------------- */
 
 async function answer(prompt, packet, { calendar, emails } = {}) {
-  const system = systemBase() + "\n\n" + contextBlock(packet, { calendar, emails });
+  const system = systemBase() + "\n\n" + contextBlock(packet, { calendar, emails, user: memory.userBrief() });
   const r = await runTask("user_answer", [{ role: "system", content: system }, { role: "user", content: prompt }]);
   return { text: r.text, provider: r.provider, model: r.model };
 }
@@ -309,8 +311,9 @@ function systemBase() {
     `below when relevant; never invent facts that aren't given.`;
 }
 
-function contextBlock(packet, { calendar, emails } = {}) {
+function contextBlock(packet, { calendar, emails, user } = {}) {
   const parts = ["CONTEXT:"];
+  if (user) parts.push("About the user (sir): " + user);
   if (packet.memory_needed && packet.loaded_records?.length) {
     parts.push("Memory: " + JSON.stringify(packet.loaded_records));
   }
