@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flywheel Balancer &amp; Simulator — Apex Simulations</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <div class="brand"><span class="dot"></span>APEX <span class="accent">SIMULATIONS</span></div>
+    <div class="nav-links">
+      <a href="index.html">Dashboard</a>
+      <a href="flywheel.html" class="active">Flywheel Tool</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container" style="padding-top: 30px; padding-bottom: 60px;">
+  <h1 style="margin-bottom:4px;">Tungsten Flywheel Balancer</h1>
+  <p style="color:var(--text-dim); margin-top:0; max-width:700px;">
+    Log every weight you actually measured, build a symmetric flywheel out of them, and simulate how it behaves spinning.
+  </p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="inventory">1. Weight Inventory</button>
+    <button class="tab-btn" data-tab="builder">2. Flywheel Builder</button>
+    <button class="tab-btn" data-tab="simulator">3. Performance Simulator</button>
+  </div>
+
+  <!-- ============ TAB 1: INVENTORY ============ -->
+  <div class="tab-panel active" id="tab-inventory">
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">
+          <h3 style="margin:0;">Add a weight</h3>
+        </div>
+        <div class="note">Weigh each tungsten cylinder individually and enter the exact reading in grams. IDs are assigned automatically in the order you add them, but you can rename/renumber the label if you already labeled your physical weights.</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Label / ID</label>
+            <input type="text" id="w-label" placeholder="e.g. 7">
+          </div>
+          <div class="field">
+            <label>Mass (grams)</label>
+            <input type="number" id="w-mass" step="0.001" placeholder="e.g. 24.183">
+          </div>
+        </div>
+        <button class="btn" id="add-weight-btn">+ Add Weight</button>
+        <button class="btn secondary" id="clear-weights-btn" style="margin-left:8px;">Clear All</button>
+      </div>
+
+      <div class="panel">
+        <h3 style="margin-top:0;">Inventory Summary</h3>
+        <div class="stat-grid">
+          <div class="stat"><div class="label">Weights logged</div><div class="value" id="stat-count">0</div></div>
+          <div class="stat"><div class="label">Total mass</div><div class="value" id="stat-total">0 g</div></div>
+          <div class="stat"><div class="label">Avg mass</div><div class="value" id="stat-avg">0 g</div></div>
+          <div class="stat"><div class="label">Spread (max−min)</div><div class="value" id="stat-spread">0 g</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0;">All Weights</h3>
+      <table id="weights-table">
+        <thead><tr><th>ID</th><th>Mass (g)</th><th></th></tr></thead>
+        <tbody id="weights-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ TAB 2: BUILDER ============ -->
+  <div class="tab-panel" id="tab-builder">
+    <div class="two-col">
+      <div class="panel">
+        <h3 style="margin-top:0;">Flywheel Configuration</h3>
+        <div class="field-row">
+          <div class="field">
+            <label># Positions around circle</label>
+            <input type="number" id="cfg-groups" value="6" min="2" max="16">
+          </div>
+          <div class="field">
+            <label>Weights stacked per position</label>
+            <input type="number" id="cfg-stack" value="2" min="1" max="8">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Mounting radius — center to weight (mm)</label>
+            <input type="number" id="cfg-radius" value="40" step="0.1">
+          </div>
+          <div class="field">
+            <label># Magnets around rim</label>
+            <input type="number" id="cfg-magnets" value="12" min="0">
+          </div>
+        </div>
+        <button class="btn" id="balance-btn">⚙ Auto-Balance Flywheel</button>
+        <div id="builder-warning"></div>
+      </div>
+
+      <div class="panel">
+        <h3 style="margin-top:0;">Balance Result</h3>
+        <div class="stat-grid" id="balance-stats">
+          <div class="stat"><div class="label">Weights needed</div><div class="value" id="stat-needed">12</div></div>
+          <div class="stat"><div class="label">Residual unbalance</div><div class="value" id="stat-unbalance">—</div></div>
+          <div class="stat"><div class="label">Effective COM offset</div><div class="value" id="stat-offset">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0;">Flywheel Diagram</h3>
+      <div class="diagram-wrap">
+        <svg id="flywheel-svg" width="480" height="480" viewBox="0 0 480 480"></svg>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0;">Position Assignments</h3>
+      <table id="assignments-table">
+        <thead><tr><th>Position</th><th>Angle</th><th>Weight IDs (stack)</th><th>Group mass</th></tr></thead>
+        <tbody id="assignments-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ TAB 3: SIMULATOR ============ -->
+  <div class="tab-panel" id="tab-simulator">
+    <div class="note" id="sim-source-note">Using flywheel from the Builder tab. Build a flywheel first if you haven't.</div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h3 style="margin-top:0;">Inputs</h3>
+        <div class="field">
+          <label>RPM: <span id="rpm-readout" class="mono">3000</span></label>
+          <input type="range" id="sim-rpm" min="0" max="20000" value="3000" step="10">
+          <input type="number" id="sim-rpm-num" value="3000" style="margin-top:8px;">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Cylinder radius (mm) — for self-inertia, optional</label>
+            <input type="number" id="sim-cyl-radius" value="0" step="0.1">
+          </div>
+          <div class="field">
+            <label>Chart max RPM</label>
+            <input type="number" id="sim-chart-max" value="10000" step="100">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 style="margin-top:0;">Results</h3>
+        <div class="stat-grid">
+          <div class="stat"><div class="label">Moment of Inertia</div><div class="value" id="out-I">—</div><div class="sub" id="out-I-sub"></div></div>
+          <div class="stat"><div class="label">Kinetic Energy</div><div class="value" id="out-E">—</div><div class="sub" id="out-E-sub"></div></div>
+          <div class="stat"><div class="label">Angular Momentum</div><div class="value" id="out-L">—</div></div>
+          <div class="stat"><div class="label">Rim Speed</div><div class="value" id="out-v">—</div><div class="sub" id="out-v-sub"></div></div>
+          <div class="stat"><div class="label">Force per Stack</div><div class="value" id="out-F">—</div><div class="sub" id="out-F-sub"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0;">Stored Energy vs RPM</h3>
+      <svg id="chart-svg" width="100%" height="260" viewBox="0 0 900 260" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+  </div>
+
+</div>
+
+<footer>Apex Simulations — Flywheel Balancer &amp; Simulator</footer>
+
+<script src="js/flywheel.js"></script>
+</body>
+</html>

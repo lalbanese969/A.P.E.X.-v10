@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Simulations — Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <div class="brand"><span class="dot"></span>APEX <span class="accent">SIMULATIONS</span></div>
+    <div class="nav-links">
+      <a href="index.html" class="active">Dashboard</a>
+      <a href="flywheel.html">Flywheel Tool</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="hero">
+    <div class="hero-text">
+      <div class="hero-eyebrow">Simulation Tools</div>
+      <h1>Build it right<br>before you build it.</h1>
+      <p>A growing set of calculators for real hardware builds — starting with balancing tungsten flywheels down to the gram.</p>
+    </div>
+    <svg class="flywheel-hero" viewBox="0 0 200 200">
+      <g class="spin-slow">
+        <circle cx="100" cy="100" r="92" fill="none" stroke="#2a2b2f" stroke-width="2"/>
+        <circle cx="100" cy="100" r="92" fill="none" stroke="#ff7a1a" stroke-width="3" stroke-dasharray="6 10" opacity="0.7"/>
+        <circle cx="100" cy="100" r="34" fill="#121315" stroke="#ff7a1a" stroke-width="2"/>
+        <circle cx="100" cy="100" r="6" fill="#ff7a1a"/>
+        <g id="hero-weights"></g>
+      </g>
+    </svg>
+  </div>
+
+  <h2 style="margin-bottom: 4px;">Tools</h2>
+  <p style="color: var(--text-dim); margin-top: 0;">Pick a simulator to get started.</p>
+
+  <div class="grid">
+    <div class="card">
+      <span class="tag live">Live</span>
+      <h3>Tungsten Flywheel Balancer</h3>
+      <p>Log your weighed tungsten cylinders, auto-balance them into a symmetric flywheel, then simulate RPM, stored energy, and rim forces.</p>
+      <a class="btn" href="flywheel.html">Open Tool →</a>
+    </div>
+
+    <div class="card disabled">
+      <span class="tag soon">Coming Soon</span>
+      <h3>Energy Calculator</h3>
+      <p>General kinetic / potential energy and power calculators for hobby builds.</p>
+      <button class="btn secondary" disabled>Not yet available</button>
+    </div>
+
+    <div class="card disabled">
+      <span class="tag soon">Coming Soon</span>
+      <h3>Weight Distribution Simulator</h3>
+      <p>Model center-of-mass and load distribution across a chassis or frame.</p>
+      <button class="btn secondary" disabled>Not yet available</button>
+    </div>
+  </div>
+</div>
+
+<footer>Apex Simulations — internal build tools.</footer>
+
+<script>
+// scatter a few decorative weight dots on the hero flywheel
+const g = document.getElementById('hero-weights');
+const n = 6, r = 62;
+for (let i = 0; i < n; i++) {
+  const a = (i / n) * Math.PI * 2 - Math.PI/2;
+  const x = 100 + r * Math.cos(a);
+  const y = 100 + r * Math.sin(a);
+  const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 10);
+  c.setAttribute('fill', '#ff7a1a'); c.setAttribute('stroke', '#08090a'); c.setAttribute('stroke-width', 2);
+  g.appendChild(c);
+}
+</script>
+</body>
+</html>

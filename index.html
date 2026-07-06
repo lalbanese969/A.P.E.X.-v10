@@ -664,6 +664,37 @@ body {
 .colorcat-row .cat-input { flex: 1; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--line-soft); background: rgba(15, 15, 17, 0.9); color: var(--color-text); font-size: 12px; outline: none; }
 .colorcat-row .def-pick { font-size: 10px; color: var(--color-text-dim); display: flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0; }
 
+/* ============================================================================
+   [STYLE:SLASH]  —  the "/" command palette that pops above the input
+   ============================================================================ */
+#cmd-palette {
+  position: absolute; left: 18px; right: 18px; bottom: calc(100% - 4px);
+  background: #141416; border: 1px solid var(--line); border-radius: 12px;
+  overflow: hidden; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5); display: none; z-index: 6;
+}
+#cmd-palette.open { display: block; }
+#cmd-palette .cmd-hint { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--color-text-dim); padding: 8px 14px 4px; }
+.cmd-item { display: flex; align-items: baseline; gap: 12px; padding: 9px 14px; cursor: pointer; }
+.cmd-item + .cmd-item { border-top: 1px solid var(--line-soft); }
+.cmd-item.active { background: rgba(255, 122, 0, 0.12); }
+.cmd-item .cmd-key { font-size: 13px; color: var(--color-orange); font-weight: 600; min-width: 96px; }
+.cmd-item .cmd-desc { font-size: 12px; color: var(--color-text-dim); }
+
+/* ============================================================================
+   [STYLE:SIM]  —  fullscreen simulations takeover (honeycomb reveal + iframe)
+   ============================================================================ */
+#sim-overlay { position: fixed; inset: 0; z-index: 300; display: none; background: var(--color-black); }
+#sim-overlay.on { display: block; }
+#sim-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--color-black); opacity: 0; }
+#sim-hex { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#sim-close {
+  position: absolute; top: 16px; right: 18px; z-index: 3; display: none;
+  align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px;
+  border: 1px solid var(--line); background: rgba(18, 18, 20, 0.82);
+  color: var(--color-orange); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#sim-close:hover { background: rgba(255, 122, 0, 0.16); }
+
 /* --- scrollbar styling (orange-tinted) --- */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -750,7 +781,9 @@ body {
       <div class="msg apex">A.P.E.X. is booting up, sir…</div>
     </div>
     <div id="input-bar">
-      <input id="chat-input" type="text" placeholder="Message A.P.E.X.…" autocomplete="off" />
+      <!-- [HTML:SLASH] filterable command menu (filled by [JS:SLASH] when you type "/") -->
+      <div id="cmd-palette"></div>
+      <input id="chat-input" type="text" placeholder="Message A.P.E.X.…  (type / for commands)" autocomplete="off" />
       <button class="send-btn" id="send-btn" aria-label="Send">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
       </button>
@@ -802,6 +835,15 @@ body {
     </div>
   </aside>
 
+</div>
+
+<!-- ==========================================================================
+     [HTML:SIM]  —  fullscreen Simulations takeover (opened via "/open sim")
+     ========================================================================== -->
+<div id="sim-overlay">
+  <iframe id="sim-iframe" title="A.P.E.X. Simulations"></iframe>
+  <canvas id="sim-hex"></canvas>
+  <button id="sim-close">✕ Exit sim</button>
 </div>
 
 <script type="module">
@@ -1768,6 +1810,184 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 
   window.APEX = window.APEX || {};
   window.APEX.loadSettings = render;
+})();
+
+
+/* ============================================================================
+   [JS:SIM]  —  fullscreen Simulations takeover.
+   Sequence: a honeycomb grid GROWS in over the whole screen, then a soft wave
+   CLEARS the hexes from the center outward (leaving a glowing honeycomb frame
+   around the edges) and reveals the sim in an iframe. Esc / Exit reverses it.
+   ============================================================================ */
+(function () {
+  const overlay = document.getElementById("sim-overlay");
+  const iframe = document.getElementById("sim-iframe");
+  const canvas = document.getElementById("sim-hex");
+  const closeBtn = document.getElementById("sim-close");
+  const ctx = canvas.getContext("2d");
+
+  const OPEN_MS = 1350;   // animation length
+  const GROW = 0.32;      // fraction of timeline spent growing the honeycomb in
+  const HEXR = 30;        // hexagon size
+  const BAND = 66;        // px band around the edges that stays lit (the frame)
+  const FEATHER = 140;    // softness of the clearing wavefront
+
+  let hexes = [], W = 0, H = 0, raf = null, startTs = 0, opening = true, t = 0;
+
+  function build() {
+    const dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    hexes = [];
+    const r = HEXR, colStep = 1.5 * r, rowStep = Math.sqrt(3) * r;
+    let col = 0;
+    for (let x = -r; x < W + r; x += colStep) {
+      const yOff = (col % 2) * (rowStep / 2);
+      for (let y = -r; y < H + rowStep; y += rowStep) hexes.push({ x, y: y + yOff });
+      col++;
+    }
+  }
+  function hexPath(cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 180) * (60 * i);
+      const px = cx + r * Math.cos(a), py = cy + r * Math.sin(a);
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+  function drawHex(cx, cy, r, alpha) {
+    hexPath(cx, cy, r);
+    const a = Math.min(alpha, 1);
+    ctx.strokeStyle = `rgba(255,122,0,${a})`;
+    ctx.lineWidth = 1.4;
+    ctx.shadowColor = `rgba(255,122,0,${a * 0.9})`;
+    ctx.shadowBlur = 10 * a;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, maxD = Math.hypot(cx, cy);
+    const grow = Math.min(1, t / GROW);
+    const rev = t <= GROW ? 0 : (t - GROW) / (1 - GROW);   // 0..1 clearing progress
+    const rr = rev * (maxD * 1.06);                        // clearing wavefront radius
+    for (const h of hexes) {
+      const dist = Math.hypot(h.x - cx, h.y - cy);
+      const edge = h.x < BAND || h.x > W - BAND || h.y < BAND || h.y > H - BAND;
+      let a;
+      if (t <= GROW) {
+        a = grow;
+      } else if (edge) {
+        a = 1;                                             // edge frame always lit
+      } else if (dist <= rr - FEATHER) {
+        a = 0;                                             // fully cleared (iframe shows)
+      } else if (dist < rr) {
+        a = (dist - (rr - FEATHER)) / FEATHER;             // soft wavefront
+      } else {
+        a = 1;
+      }
+      const scale = t <= GROW ? (0.25 + 0.75 * grow) : 1;
+      if (a > 0.02) drawHex(h.x, h.y, HEXR * scale, a);
+    }
+    iframe.style.opacity = t <= GROW ? 0 : Math.min(1, rev * 1.4);
+  }
+  function frame(ts) {
+    if (!startTs) startTs = ts;
+    const prog = Math.min(1, (ts - startTs) / OPEN_MS);
+    t = opening ? prog : 1 - prog;
+    draw();
+    if (prog < 1) { raf = requestAnimationFrame(frame); }
+    else {
+      raf = null; startTs = 0;
+      if (opening) { iframe.style.opacity = 1; closeBtn.style.display = "flex"; }
+      else { overlay.classList.remove("on"); ctx.clearRect(0, 0, W, H); }
+    }
+  }
+
+  function open() {
+    if (overlay.classList.contains("on")) return;
+    if (!iframe.getAttribute("src")) iframe.setAttribute("src", "apex-simulations/index.html");
+    overlay.classList.add("on");
+    build();
+    closeBtn.style.display = "none";
+    iframe.style.opacity = 0;
+    opening = true; startTs = 0;
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+  }
+  function close() {
+    if (!overlay.classList.contains("on")) return;
+    closeBtn.style.display = "none";
+    opening = false; startTs = 0;
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+  }
+
+  closeBtn.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("on")) close();
+  });
+
+  window.APEX = window.APEX || {};
+  window.APEX.openSim = open;
+  window.APEX.closeSim = close;
+})();
+
+
+/* ============================================================================
+   [JS:SLASH]  —  the "/" command palette. Type "/" to see commands; it filters
+   as you type. ↑/↓ to move, Enter/click to run, Esc to dismiss.
+   ============================================================================ */
+(function () {
+  const input = document.getElementById("chat-input");
+  const palette = document.getElementById("cmd-palette");
+  const messages = document.getElementById("messages");
+
+  const COMMANDS = [
+    { key: "/open sim", desc: "Open the Simulations lab", run: () => window.APEX.openSim() },
+    { key: "/help", desc: "Show available commands", run: showHelp },
+  ];
+  let matches = [], sel = 0;
+
+  function showHelp() {
+    const div = document.createElement("div");
+    div.className = "msg apex";
+    div.textContent = "Commands, sir — " + COMMANDS.map((c) => c.key).join("  ·  ");
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function render() {
+    palette.innerHTML = `<div class="cmd-hint">Commands</div>` + matches.map((c, i) =>
+      `<div class="cmd-item ${i === sel ? "active" : ""}" data-i="${i}">
+         <span class="cmd-key">${c.key}</span><span class="cmd-desc">${c.desc}</span></div>`).join("");
+    palette.classList.add("open");
+    palette.querySelectorAll(".cmd-item").forEach((el) =>
+      el.addEventListener("mousedown", (e) => { e.preventDefault(); choose(+el.dataset.i); }));
+  }
+  function refresh() {
+    const v = input.value;
+    if (!v.startsWith("/")) return closePalette();
+    const q = v.slice(1).toLowerCase();
+    matches = COMMANDS.filter((c) => c.key.slice(1).toLowerCase().startsWith(q) || c.key.toLowerCase().includes(v.toLowerCase()));
+    if (!matches.length) return closePalette();
+    if (sel >= matches.length) sel = matches.length - 1;
+    render();
+  }
+  function closePalette() { palette.classList.remove("open"); palette.innerHTML = ""; matches = []; sel = 0; }
+  function choose(i) { const c = matches[i]; if (!c) return; input.value = ""; closePalette(); c.run(); }
+
+  input.addEventListener("input", refresh);
+  // capture phase so we can intercept Enter before [JS:CHAT]'s send handler
+  input.addEventListener("keydown", (e) => {
+    if (!palette.classList.contains("open")) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); sel = (sel + 1) % matches.length; render(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); sel = (sel - 1 + matches.length) % matches.length; render(); }
+    else if (e.key === "Enter") { e.preventDefault(); e.stopImmediatePropagation(); choose(sel); }
+    else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+  }, true);
+  document.addEventListener("click", (e) => { if (!palette.contains(e.target) && e.target !== input) closePalette(); });
 })();
 </script>
 
