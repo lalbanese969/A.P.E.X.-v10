@@ -53,6 +53,90 @@ export const FOOD_DB = {
   carrot:           { unit: "each", calories: 25,  protein: 1,   carbs: 6,  fat: 0   },
   onion:            { unit: "100g", calories: 40,  protein: 1,   carbs: 9,  fat: 0   },
   green_onion:      { unit: "stalk",calories: 5,   protein: 0,   carbs: 1,  fat: 0   },
+
+  // --- more proteins (dairy-free) ---
+  chicken_thigh:    { unit: "oz",   calories: 52,  protein: 8,   carbs: 0,  fat: 2   },
+  ground_turkey:    { unit: "oz",   calories: 43,  protein: 7,   carbs: 0,  fat: 2   },
+  deli_turkey:      { unit: "oz",   calories: 30,  protein: 5,   carbs: 1,  fat: 1   },
+  turkey_bacon:     { unit: "slice",calories: 30,  protein: 2,   carbs: 0,  fat: 2   },
+  bacon:            { unit: "slice",calories: 43,  protein: 3,   carbs: 0,  fat: 3   },
+  cod:              { unit: "oz",   calories: 26,  protein: 6,   carbs: 0,  fat: 0   },
+  tilapia:          { unit: "oz",   calories: 36,  protein: 7,   carbs: 0,  fat: 1   },
+  tofu:             { unit: "oz",   calories: 20,  protein: 2,   carbs: 1,  fat: 1   },
+  tempeh:           { unit: "oz",   calories: 54,  protein: 5,   carbs: 3,  fat: 3   },
+  edamame:          { unit: "cup",  calories: 188, protein: 18,  carbs: 14, fat: 8   },
+  black_beans:      { unit: "cup",  calories: 227, protein: 15,  carbs: 41, fat: 1   },
+  chickpeas:        { unit: "cup",  calories: 269, protein: 15,  carbs: 45, fat: 4   },
+  lentils:          { unit: "cup",  calories: 230, protein: 18,  carbs: 40, fat: 1   },
+
+  // --- more carbs ---
+  oats_dry:         { unit: "cup",  calories: 307, protein: 11,  carbs: 55, fat: 5   },
+  oatmeal_cooked:   { unit: "cup",  calories: 150, protein: 5,   carbs: 27, fat: 3   },
+  pasta_cooked:     { unit: "cup",  calories: 220, protein: 8,   carbs: 43, fat: 1   },
+  flour_tortilla:   { unit: "each", calories: 140, protein: 4,   carbs: 24, fat: 4   },
+  corn_tortilla:    { unit: "each", calories: 50,  protein: 1,   carbs: 11, fat: 1   },
+  english_muffin:   { unit: "each", calories: 130, protein: 5,   carbs: 25, fat: 1   },
+  quinoa_cooked:    { unit: "cup",  calories: 222, protein: 8,   carbs: 39, fat: 4   },
+  rice_cake:        { unit: "each", calories: 35,  protein: 1,   carbs: 7,  fat: 0   },
+  pretzels:         { unit: "oz",   calories: 108, protein: 3,   carbs: 23, fat: 1   },
+  cereal:           { unit: "cup",  calories: 120, protein: 2,   carbs: 27, fat: 1   },
+  tortilla_chips:   { unit: "oz",   calories: 140, protein: 2,   carbs: 18, fat: 7   },
+
+  // --- more fruit / veg ---
+  avocado:          { unit: "each", calories: 240, protein: 3,   carbs: 12, fat: 22  },
+  spinach:          { unit: "cup",  calories: 7,   protein: 1,   carbs: 1,  fat: 0   },
+  bell_pepper:      { unit: "each", calories: 25,  protein: 1,   carbs: 6,  fat: 0   },
+  tomato:           { unit: "each", calories: 22,  protein: 1,   carbs: 5,  fat: 0   },
+  cucumber:         { unit: "each", calories: 45,  protein: 2,   carbs: 11, fat: 0   },
+  mushrooms:        { unit: "cup",  calories: 15,  protein: 2,   carbs: 2,  fat: 0   },
+  corn:             { unit: "cup",  calories: 130, protein: 5,   carbs: 27, fat: 2   },
+  peas:             { unit: "cup",  calories: 118, protein: 8,   carbs: 21, fat: 0   },
+  pineapple:        { unit: "cup",  calories: 82,  protein: 1,   carbs: 22, fat: 0   },
+  mango:            { unit: "each", calories: 200, protein: 3,   carbs: 50, fat: 1   },
+  watermelon:       { unit: "cup",  calories: 46,  protein: 1,   carbs: 11, fat: 0   },
+
+  // --- fats, sauces, condiments (dairy-free) ---
+  mayo:             { unit: "tbsp", calories: 90,  protein: 0,   carbs: 0,  fat: 10  },
+  ketchup:          { unit: "tbsp", calories: 20,  protein: 0,   carbs: 5,  fat: 0   },
+  mustard:          { unit: "tbsp", calories: 10,  protein: 1,   carbs: 1,  fat: 0   },
+  soy_sauce:        { unit: "tbsp", calories: 10,  protein: 1,   carbs: 1,  fat: 0   },
+  hoisin_sauce:     { unit: "tbsp", calories: 35,  protein: 1,   carbs: 7,  fat: 1   },
+  teriyaki:         { unit: "tbsp", calories: 15,  protein: 1,   carbs: 3,  fat: 0   },
+  bbq_sauce:        { unit: "tbsp", calories: 30,  protein: 0,   carbs: 7,  fat: 0   },
+  marinara:         { unit: "cup",  calories: 90,  protein: 3,   carbs: 15, fat: 3   },
+  salsa:            { unit: "tbsp", calories: 5,   protein: 0,   carbs: 1,  fat: 0   },
+  hot_sauce:        { unit: "tsp",  calories: 1,   protein: 0,   carbs: 0,  fat: 0   },
+  honey:            { unit: "tbsp", calories: 64,  protein: 0,   carbs: 17, fat: 0   },
+  maple_syrup:      { unit: "tbsp", calories: 52,  protein: 0,   carbs: 13, fat: 0   },
+  jam:              { unit: "tbsp", calories: 50,  protein: 0,   carbs: 13, fat: 0   },
+  hummus:           { unit: "tbsp", calories: 35,  protein: 1,   carbs: 3,  fat: 2   },
+  guacamole:        { unit: "tbsp", calories: 25,  protein: 0,   carbs: 2,  fat: 2   },
+  coconut_oil:      { unit: "tbsp", calories: 117, protein: 0,   carbs: 0,  fat: 14  },
+
+  // --- nuts / snacks ---
+  almonds:          { unit: "oz",   calories: 164, protein: 6,   carbs: 6,  fat: 14  },
+  peanuts:          { unit: "oz",   calories: 161, protein: 7,   carbs: 5,  fat: 14  },
+  cashews:          { unit: "oz",   calories: 157, protein: 5,   carbs: 9,  fat: 12  },
+  beef_jerky:       { unit: "oz",   calories: 116, protein: 9,   carbs: 3,  fat: 7   },
+  protein_bar:      { unit: "each", calories: 210, protein: 20,  carbs: 22, fat: 7   },
+  dark_chocolate:   { unit: "oz",   calories: 170, protein: 2,   carbs: 13, fat: 12  },
+  popcorn:          { unit: "cup",  calories: 31,  protein: 1,   carbs: 6,  fat: 0   },
+  trail_mix:        { unit: "oz",   calories: 140, protein: 4,   carbs: 13, fat: 9   },
+
+  // --- beverages (dairy-free) ---
+  orange_juice:     { unit: "cup",  calories: 112, protein: 2,   carbs: 26, fat: 0   },
+  almond_milk:      { unit: "cup",  calories: 40,  protein: 1,   carbs: 2,  fat: 3   },
+  oat_milk:         { unit: "cup",  calories: 120, protein: 3,   carbs: 16, fat: 5   },
+  soda:             { unit: "can",  calories: 140, protein: 0,   carbs: 39, fat: 0   },
+  sports_drink:     { unit: "cup",  calories: 80,  protein: 0,   carbs: 21, fat: 0   },
+  pea_protein_shake:{ unit: "scoop",calories: 120, protein: 24,  carbs: 3,  fat: 2   },
+  coffee:           { unit: "cup",  calories: 2,   protein: 0,   carbs: 0,  fat: 0   },
+
+  // --- breakfast ---
+  pancake:          { unit: "each", calories: 90,  protein: 2,   carbs: 15, fat: 3   },
+  waffle:           { unit: "each", calories: 100, protein: 2,   carbs: 15, fat: 3   },
+  hash_browns:      { unit: "cup",  calories: 200, protein: 2,   carbs: 25, fat: 11  },
+
   belvita_chocolate_sandwich: { unit: "pack", calories: 230, protein: 3, carbs: 27, fat: 8 },
 };
 
@@ -60,15 +144,26 @@ export const FOOD_DB = {
 export const FOOD_ALIASES = {
   chicken: "chicken_breast", turkey: "turkey_breast", steak: "sirloin_steak",
   beef: "ground_beef_90_10", "ground beef": "ground_beef_90_10", hamburger: "ground_beef_90_10",
+  "ground turkey": "ground_turkey", "deli turkey": "deli_turkey", "turkey slices": "deli_turkey",
   pork: "pork_tenderloin", rice: "white_rice_cooked", potato: "russet_potato", bread: "white_bread",
   eggs: "egg", "egg whites": "egg_white", pb: "peanut_butter", belvita: "belvita_chocolate_sandwich",
+  oats: "oats_dry", oatmeal: "oatmeal_cooked", pasta: "pasta_cooked", tortilla: "flour_tortilla",
+  wrap: "flour_tortilla", quinoa: "quinoa_cooked", chips: "tortilla_chips", beans: "black_beans",
+  oj: "orange_juice", "protein shake": "pea_protein_shake", "protein powder": "pea_protein_shake",
+  shake: "pea_protein_shake", hoisin: "hoisin_sauce",
 };
 
-/** Compact reference block to drop into the AI prompt. */
+/** Full per-value reference block (kept for debugging / future use). */
 export function foodDbPromptBlock() {
   return Object.entries(FOOD_DB)
     .map(([k, v]) => `${k.replace(/_/g, " ")} (per ${v.unit}): ${v.calories} kcal, ${v.protein}p, ${v.carbs}c, ${v.fat}f`)
     .join("\n");
+}
+
+/** Just the food NAMES — the app computes exact nutrition from the DB in code, so the
+    AI only needs to pick a matching name (keeps the prompt small). */
+export function foodDbNames() {
+  return Object.keys(FOOD_DB).map((k) => k.replace(/_/g, " ")).join(", ");
 }
 
 // same precise key as nutrition.js: drop articles + trailing plural "s" per word

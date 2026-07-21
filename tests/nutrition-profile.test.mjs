@@ -158,6 +158,11 @@ console.log("\n[12] Food database lookup (per base unit) + no double-count");
   eq("belvita per pack (230 kcal)", [belvita.unit, belvita.calories], ["pack", 230]);
   ok("'belvita' alias resolves", foodDb.lookupFood("belvita")?.key === "belvita_chocolate_sandwich");
   ok("'chicken' -> chicken_breast", foodDb.lookupFood("chicken")?.key === "chicken_breast");
+  ok("expanded DB: tofu resolves (per oz)", foodDb.lookupFood("tofu")?.unit === "oz");
+  ok("expanded DB: oatmeal -> oatmeal_cooked", foodDb.lookupFood("oatmeal")?.key === "oatmeal_cooked");
+  ok("expanded DB: 'oj' -> orange juice", foodDb.lookupFood("oj")?.key === "orange_juice");
+  ok("expanded DB: 'protein shake' -> pea protein", foodDb.lookupFood("protein shake")?.key === "pea_protein_shake");
+  ok("expanded DB has 60+ foods", Object.keys(foodDb.FOOD_DB).length >= 60);
   ok("unknown food -> null", foodDb.lookupFood("dragon fruit smoothie") === null);
   // the fix: nutrition = per-unit × qty computed in code (was double-counted before)
   ok("10 oz turkey = 380 kcal / 90 g protein (NOT 4200/900)", turkey.calories * 10 === 380 && turkey.protein * 10 === 90);

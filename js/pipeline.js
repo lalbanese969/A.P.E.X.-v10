@@ -20,7 +20,7 @@ import * as connections from "./connections.js";
 import * as settingsMod from "./settings.js";
 import * as profile from "./profile.js";
 import * as nutrition from "./nutrition.js";
-import { foodDbPromptBlock, lookupFood } from "./foodDb.js";
+import { foodDbNames, lookupFood } from "./foodDb.js";
 import { runTask, AIError } from "./aiCenter.js";
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
@@ -256,8 +256,10 @@ async function parseNutrition(prompt) {
     "ate it or are asking, a vague food, an odd quantity). When sure, confident:true and question:\"\".\n" +
     "- Use [] / 0 / null / \"\" for anything absent. maybe_dairy=true if it usually has milk/cheese/butter/cream/whey/casein " +
     "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").\n" +
-    "REFERENCE VALUES:\n" + foodDbPromptBlock() + "\n" +
-    "Examples: 'I had 6 oz chicken and a cup of rice' -> foods:[chicken breast qty6 per oz, white rice cooked qty1 per cup]. " +
+    "KNOWN FOODS (use one of THESE names when a food matches — the app fills in the exact per-unit " +
+    "nutrition itself, so you only need the right name + qty + unit): " + foodDbNames() + ".\n" +
+    "For foods NOT in that list, give your best realistic estimate.\n" +
+    "Examples: 'I had 6 oz chicken and a cup of rice' -> foods:[{name:'chicken breast',qty:6,unit:'oz'},{name:'white rice cooked',qty:1,unit:'cup'}]. " +
     "'how many calories in a chocolate belvita?' -> foods:[], confident:true. " +
     "'I had some steak' -> foods:[sirloin per oz ...], note:'assumed sirloin steak'.";
   // No fast-model override -> uses the primary full model (Groq 70B) with Gemini fallback.
