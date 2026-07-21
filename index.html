@@ -795,8 +795,10 @@ body {
 .food-input button { padding: 0 15px; border-radius: 8px; border: none; background: var(--color-orange); color: #160b00; font-weight: 700; font-size: 13px; cursor: pointer; }
 .food-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
 .food-item:first-child { border-top: none; }
-.food-item .fname { color: var(--color-text); }
+.food-item .fname { color: var(--color-text); flex: 1; }
 .food-item .fkcal { color: var(--color-orange-soft); font-size: 12px; white-space: nowrap; margin-left: 10px; }
+.food-x { flex-shrink: 0; margin-left: 10px; background: transparent; border: none; color: var(--color-text-dim); font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 5px; }
+.food-x:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.12); }
 
 /* today's workout */
 .wo-ex { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
@@ -2395,7 +2397,8 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   function entryRow(f) {
     return `<div class="food-item"><span class="fname">${f.qty > 1 ? f.qty + "× " : ""}${f.name}` +
       `${f.source === "memory" ? ' <span class="mem-tag">remembered</span>' : ""}</span>` +
-      `<span class="fkcal">${f.calories} kcal · ${f.protein}p ${f.carbs}c ${f.fat}f</span></div>`;
+      `<span class="fkcal">${f.calories} kcal · ${f.protein}p ${f.carbs}c ${f.fat}f</span>` +
+      `<button class="food-x" data-id="${f.id}" title="Remove" aria-label="Remove">×</button></div>`;
   }
   function exRow(e, i) {
     return `<div class="wo-ex ${day.done[i] ? "done" : ""}" data-i="${i}">
@@ -2489,6 +2492,9 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         nutritionMod.clearDay(); render();
       }
     });
+    // × on a logged item removes just that entry
+    panels.querySelectorAll(".food-x").forEach((b) =>
+      b.addEventListener("click", () => { nutritionMod.removeFoodEntry(b.dataset.id); render(); }));
     panels.querySelectorAll("#wo-list .wo-ex").forEach((el) =>
       el.addEventListener("click", () => { const i = +el.dataset.i; day.done[i] = !day.done[i]; saveDay(); render(); }));
   }

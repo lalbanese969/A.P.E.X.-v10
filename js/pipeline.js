@@ -20,6 +20,7 @@ import * as connections from "./connections.js";
 import * as settingsMod from "./settings.js";
 import * as profile from "./profile.js";
 import * as nutrition from "./nutrition.js";
+import { foodDbPromptBlock } from "./foodDb.js";
 import { runTask, AIError } from "./aiCenter.js";
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
@@ -228,25 +229,30 @@ async function parseNutrition(prompt) {
     "{\"foods\":[{\"name\":str,\"qty\":num,\"unit\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num,\"maybe_dairy\":bool}]," +
     "\"water_oz\":num,\"remove\":[str],\"alias\":{\"word\":str,\"means\":str}|null," +
     "\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null," +
-    "\"confident\":bool,\"question\":str}.\n" +
+    "\"note\":str,\"confident\":bool,\"question\":str}.\n" +
     "RULES:\n" +
     "- Put a food in `foods` ONLY if the user is reporting they ACTUALLY ATE or DRANK it (\"I ate\", \"I had\", " +
     "\"for lunch I had\", \"just finished\"). If they are ASKING about a food, its calories, whether it's dairy-free, " +
     "considering it, or it's hypothetical/future — DO NOT log it; foods:[].\n" +
-    "- Macros are PER ONE unit; qty = how many. ALWAYS give realistic protein/carbs/fat/fiber — NEVER 0 protein for " +
-    "meat/eggs/fish/beans (e.g. 3 oz ham ≈ 90 kcal, 15g protein, 1g carb, 3g fat; 2 large eggs ≈ 140 kcal, 12g protein).\n" +
+    "- Use the REFERENCE VALUES below (USDA-based) whenever a food matches one (or an alias). Macros are PER ONE unit " +
+    "the user used; qty = how many of that unit. Convert item counts using the reference (e.g. 'a chicken breast' ≈ 6 oz). " +
+    "Assume COOKED weight for meats unless told raw. Round to whole numbers. NEVER 0 protein for meat/eggs/fish/beans.\n" +
+    "- Aliases: chicken=chicken breast, turkey=turkey breast, steak=sirloin steak (unless a cut is named), " +
+    "'ground beef'=90/10 unless specified, pork=pork tenderloin, rice=white rice cooked, potato=russet, bread=white bread.\n" +
+    "- If a meat's type is unspecified (e.g. 'steak', 'ground beef'), use the lean/common default and set `note` " +
+    "like 'assumed sirloin'. Prefer a barcode/branded value if the user gives one.\n" +
     "- water_oz = fluids in fl oz ('a bottle'≈20, 'a glass'≈8, '1 L'≈34).\n" +
     "- remove = foods to REMOVE from today's log ('remove the ham', 'undo the belvita').\n" +
     "- alias = a CODE WORD ('when I say X I mean Y', 'call it X'): word=short code, means=full food name.\n" +
     "- correction = the REAL macros of a food ('belvita is 230 cal'): per-unit; food=its name or 'it'.\n" +
-    "- confident: set FALSE and put a short clarifying question in `question` if the message is AMBIGUOUS — " +
-    "unclear whether they ate it or are just asking, a vague/unclear food, an odd quantity, or you're unsure which item " +
-    "they mean. When you're sure, confident:true and question:\"\". Prefer asking over guessing.\n" +
-    "- Use [] / 0 / null for anything absent. maybe_dairy=true if it usually has milk/cheese/butter/cream/whey/casein " +
+    "- confident: set FALSE and put a short clarifying question in `question` if truly AMBIGUOUS (unclear whether they " +
+    "ate it or are asking, a vague food, an odd quantity). When sure, confident:true and question:\"\".\n" +
+    "- Use [] / 0 / null / \"\" for anything absent. maybe_dairy=true if it usually has milk/cheese/butter/cream/whey/casein " +
     "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").\n" +
-    "Examples: 'I had 2 eggs and a bagel' -> foods eggs+bagel, confident:true. " +
+    "REFERENCE VALUES:\n" + foodDbPromptBlock() + "\n" +
+    "Examples: 'I had 6 oz chicken and a cup of rice' -> foods:[chicken breast qty6 per oz, white rice cooked qty1 per cup]. " +
     "'how many calories in a chocolate belvita?' -> foods:[], confident:true. " +
-    "'that thing I made earlier' -> confident:false, question:'Which meal, sir, and what was in it?'";
+    "'I had some steak' -> foods:[sirloin per oz ...], note:'assumed sirloin steak'.";
   // No fast-model override -> uses the primary full model (Groq 70B) with Gemini fallback.
   const r = await runTask("nutrition_parse",
     [{ role: "system", content: sys }, { role: "user", content: prompt }], { jsonMode: true });
@@ -264,8 +270,15 @@ async function parseNutrition(prompt) {
 
   if (!foods.length && !water && !remove.length && !alias && !correction) return { empty: true, ai_meta };
   return { foods, water, remove, alias, correction,
+    note: typeof p.note === "string" ? p.note.trim() : "",
     confident: p.confident !== false, question: typeof p.question === "string" ? p.question.trim() : "", ai_meta };
 }
+
+// normalize a unit so "oz"/"ounce"/"ounces" (etc.) compare equal
+const UNIT_ALIAS = { ounce: "oz", ounces: "oz", oz: "oz", each: "each", item: "each", piece: "each",
+  slice: "slice", slices: "slice", cup: "cup", cups: "cup", tbsp: "tbsp", tablespoon: "tbsp",
+  tsp: "tsp", teaspoon: "tsp", stalk: "stalk", pack: "pack", g: "g", gram: "g", grams: "g" };
+function normUnit(u) { const t = (u || "").toLowerCase().trim(); return UNIT_ALIAS[t] || t || null; }
 
 /** Apply a parsed nutrition intent. removeMode "all" | "one" governs removals. */
 function applyNutrition(parsed, { removeMode = "one" } = {}) {
@@ -311,9 +324,11 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
     if (!f || !f.name) continue;
     const qty = Number(f.qty) || 1;
     const known = nutrition.findFood(f.name);
-    // only REUSE remembered macros if they're actually valid — a saved food with all
-    // zeros (e.g. a bad earlier estimate) must NOT poison this log.
-    const knownUsable = known && (known.calories > 0 || known.protein > 0 || known.carbs > 0 || known.fat > 0);
+    // only REUSE remembered macros if they're valid AND in the SAME unit as this log —
+    // a saved "per oz" value must not be reused for "a whole breast", and an all-zero
+    // record must not poison the log.
+    const unitMatch = !normUnit(f.unit) || !normUnit(known?.per?.unit) || normUnit(f.unit) === normUnit(known?.per?.unit);
+    const knownUsable = known && unitMatch && (known.calories > 0 || known.protein > 0 || known.carbs > 0 || known.fat > 0);
     const name = known ? known.name : f.name;
     const aiPer = { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
     const per = knownUsable
@@ -345,6 +360,7 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
     parts.push(`Day: ${t.calories}/${g.kcal} kcal · protein ${t.protein}/${g.protein}g` +
       `${pLeft > 0 ? ` (${pLeft}g to go)` : " ✓"} · water ${t.water_oz}/${g.water_oz} oz.`);
   }
+  if (parsed.note && logged.length) parts.push(`(${parsed.note})`);
   if (dairy.length) parts.push(`Heads up — ${dairy.join(", ")} may contain dairy; check the label (milk-protein allergy).`);
   if (unknown.length) {
     nutrition.setPending({ names: unknown, date: nutrition.todayStr() });
