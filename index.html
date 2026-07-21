@@ -852,6 +852,8 @@ body {
 .bottle-pct small { font-size: 10px; margin-left: 1px; }
 .macro-fill.fb { background: #8a5a12; }
 .mem-tag { font-size: 10px; color: var(--color-orange-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+.reset-day-btn { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); font-family: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; margin-top: 12px; }
+.reset-day-btn:hover { color: var(--color-orange); border-color: var(--line); }
 @media (max-width: 760px) { .hero-row { flex-direction: column; align-items: center; } .hero-cal { width: 100%; } }
 
 /* --- responsive: iPad = side-by-side; iPhone (narrow) = stacked, content on TOP, chat at BOTTOM --- */
@@ -2434,6 +2436,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         <div class="bcard-head"><span class="bcard-title">Today's food</span><span class="bcard-note">log by telling APEX →</span></div>
         <div id="food-list">${foods.length ? foods.map(entryRow).join("")
           : `<div class="bcard-note">Nothing logged yet — just tell APEX in chat: “I ate 2 eggs and a bagel” or “drank 24 oz”.</div>`}</div>
+        <div style="text-align:right;"><button id="reset-day" class="reset-day-btn">Reset today</button></div>
       </div>`;
   }
   function workoutHTML() {
@@ -2480,6 +2483,12 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     panels.querySelectorAll(".big-tab").forEach((b) =>
       b.addEventListener("click", () => { activeTab = +b.dataset.tab; render(); }));
     // nutrition + water are logged by talking to APEX (see the coach chat send()), not buttons.
+    const rd = document.getElementById("reset-day");
+    if (rd) rd.addEventListener("click", () => {
+      if (confirm("Clear today's food & water log? (your saved foods and code words are kept)")) {
+        nutritionMod.clearDay(); render();
+      }
+    });
     panels.querySelectorAll("#wo-list .wo-ex").forEach((el) =>
       el.addEventListener("click", () => { const i = +el.dataset.i; day.done[i] = !day.done[i]; saveDay(); render(); }));
   }

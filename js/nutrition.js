@@ -26,6 +26,12 @@ export const todayStr = () => new Date().toISOString().slice(0, 10);
 let _seq = 0;
 const uid = (p) => p + Date.now().toString(36) + (_seq++).toString(36);
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// A precise match key: drop articles + trailing plural "s" per word. So "a banana",
+// "banana", "bananas" all key to "banana" — but "ham" ("ham") ≠ "ham rolls" ("ham roll"),
+// which stops a plain "ham" from wrongly matching (and poisoning) "ham rolls".
+const ARTICLES = /\b(a|an|the|some|of|my|his|her|our)\b/g;
+const keyOf = (s) => norm(s).replace(ARTICLES, " ").replace(/\s+/g, " ").trim()
+  .split(" ").filter(Boolean).map((w) => w.replace(/s$/, "")).join(" ");
 
 const ZERO = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0 };
 const MACROS = ["calories", "protein", "carbs", "fat", "fiber", "sodium"];
@@ -106,14 +112,14 @@ export function saveRecipe(recipe) {
 /* ---- food memory ---------------------------------------------------------- */
 export function foods() { return getItem(FOODS_KEY, []); }
 
-/** Find a remembered food by (normalized) name or alias. Returns the food or null. */
+/** Find a remembered food by name or code word — PRECISE (key-based) match only,
+    so "ham rolls" no longer collides with a saved "ham". */
 export function findFood(name) {
-  const n = norm(name);
-  if (!n) return null;
+  const k = keyOf(name);
+  if (!k) return null;
   const list = foods();
-  return list.find((f) => norm(f.name) === n)
-      || list.find((f) => (f.aliases || []).some((a) => norm(a) === n))
-      || list.find((f) => norm(f.name).includes(n) || n.includes(norm(f.name)))
+  return list.find((f) => keyOf(f.name) === k)
+      || list.find((f) => (f.aliases || []).some((a) => keyOf(a) === k))
       || null;
 }
 
@@ -145,11 +151,11 @@ export function rememberFood(food) {
   return rec;
 }
 
-/* Find the index of a remembered food matching any of these names/aliases. */
+/* Find the index of a remembered food matching any of these names/aliases (key-based). */
 function findIndexFor(list, name, aliases = []) {
-  const names = [name, ...(aliases || [])].map(norm).filter(Boolean);
-  if (!names.length) return -1;
-  return list.findIndex((f) => names.includes(norm(f.name)) || (f.aliases || []).some((a) => names.includes(norm(a))));
+  const keys = [name, ...(aliases || [])].map(keyOf).filter(Boolean);
+  if (!keys.length) return -1;
+  return list.findIndex((f) => keys.includes(keyOf(f.name)) || (f.aliases || []).some((a) => keys.includes(keyOf(a))));
 }
 
 /** Upsert a food with EXPLICIT macros/aliases (used to teach or correct a food).
@@ -272,24 +278,24 @@ export function removeFoodEntry(id, d = todayStr()) {
   return day.foods.length < before;
 }
 
-function matchNames(nameOrAlias) {
+function matchKeys(nameOrAlias) {
   const f = findFood(nameOrAlias);
-  return [nameOrAlias, ...(f ? [f.name, ...(f.aliases || [])] : [])].map(norm);
+  return [nameOrAlias, ...(f ? [f.name, ...(f.aliases || [])] : [])].map(keyOf);
 }
 
 /** Today's log entries matching a food name or its code word (used to decide if a
     removal is ambiguous — more than one entry — so the coach can ask first). */
 export function findLoggedByName(nameOrAlias, d = todayStr()) {
-  const names = matchNames(nameOrAlias);
-  return getDay(d).foods.filter((e) => names.includes(norm(e.name)));
+  const keys = matchKeys(nameOrAlias);
+  return getDay(d).foods.filter((e) => keys.includes(keyOf(e.name)));
 }
 
 /** Remove ALL today's entries matching a food name/code word ("remove all the ham"). */
 export function removeFoodByName(nameOrAlias, d = todayStr()) {
   const day = getDay(d);
   const before = day.foods.length;
-  const names = matchNames(nameOrAlias);
-  day.foods = day.foods.filter((e) => !names.includes(norm(e.name)));
+  const keys = matchKeys(nameOrAlias);
+  day.foods = day.foods.filter((e) => !keys.includes(keyOf(e.name)));
   const removed = before - day.foods.length;
   if (removed) saveDay(day);
   return removed;
@@ -298,11 +304,17 @@ export function removeFoodByName(nameOrAlias, d = todayStr()) {
 /** Remove only the MOST RECENT matching entry (the safe default for "remove the X"). */
 export function removeOneFoodByName(nameOrAlias, d = todayStr()) {
   const day = getDay(d);
-  const names = matchNames(nameOrAlias);
+  const keys = matchKeys(nameOrAlias);
   for (let i = day.foods.length - 1; i >= 0; i--) {
-    if (names.includes(norm(day.foods[i].name))) { day.foods.splice(i, 1); saveDay(day); return 1; }
+    if (keys.includes(keyOf(day.foods[i].name))) { day.foods.splice(i, 1); saveDay(day); return 1; }
   }
   return 0;
+}
+
+/** Wipe today's log back to empty (food, water, creatine). For "clear today". */
+export function clearDay(d = todayStr()) {
+  setItem(dayKey(d), freshDay(d));
+  return getDay(d);
 }
 
 /* Pending CONFIRMATION: a parsed nutrition action we asked the user to confirm before

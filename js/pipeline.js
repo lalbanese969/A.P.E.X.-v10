@@ -175,7 +175,7 @@ function looksNutrition(p) {
   return /\b(i (ate|had|eat|drank|consumed|made)|just (ate|had|drank|made)|for (breakfast|lunch|dinner)|as a snack|had a|ate a|log (this|that|it|my)|drank|drinking)\b/.test(t)
     || /\bwhen i say\b|\bcode ?word\b|\b(means|refers to)\b/.test(t)
     || /\b(is|was|has|=)\s*\d+\s*(cal|calorie|calories|kcal|g|grams?|oz)\b/.test(t)
-    || /\b(remove|delete|undo|scratch|take (off|out))\b|\bdidn'?t (actually |really )?(eat|have|drink)\b/.test(t)
+    || /\b(remove|delete|undo|scratch|clear|reset|wipe|start over|restart|take (off|out))\b|\bdidn'?t (actually |really )?(eat|have|drink)\b/.test(t)
     || (/\b\d+(\.\d+)?\s*(oz|ounce|ounces|ml|l|liter|litre|cup|cups|glass|glasses|bottle|bottles)\b/.test(t)
         && /\b(water|drank|drink|drinking|hydrat|fluids?)\b/.test(t));
 }
@@ -311,15 +311,25 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
     if (!f || !f.name) continue;
     const qty = Number(f.qty) || 1;
     const known = nutrition.findFood(f.name);
+    // only REUSE remembered macros if they're actually valid — a saved food with all
+    // zeros (e.g. a bad earlier estimate) must NOT poison this log.
+    const knownUsable = known && (known.calories > 0 || known.protein > 0 || known.carbs > 0 || known.fat > 0);
     const name = known ? known.name : f.name;
-    const per = known
+    const aiPer = { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
+    const per = knownUsable
       ? { calories: known.calories, protein: known.protein, carbs: known.carbs, fat: known.fat, fiber: known.fiber, sodium: known.sodium || 0 }
-      : { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
+      : aiPer;
+    // heal a blank/zero memory with the fresh estimate so it's right next time
+    if (known && !knownUsable && (aiPer.calories > 0 || aiPer.protein > 0)) {
+      nutrition.setFood({ name: known.name, ...aiPer, source: "ai_estimate" });
+    }
     nutrition.logFood({ name, qty, unit: f.unit || null, ...per,
-      source: known ? "memory" : "ai_estimate", confidence: known ? 0.9 : 0.4, dairy: !!f.maybe_dairy });
-    logged.push({ name, qty, calories: Math.round(per.calories * qty), fromMemory: !!known });
+      source: knownUsable ? "memory" : "ai_estimate", confidence: knownUsable ? 0.9 : 0.4, dairy: !!f.maybe_dairy });
+    logged.push({ name, qty, calories: Math.round(per.calories * qty), fromMemory: knownUsable });
     if (f.maybe_dairy) dairy.push(name);
-    if (!known) unknown.push(name);
+    // ask to confirm a brand-new food, or when we still couldn't get real numbers (all zero)
+    const allZero = per.calories === 0 && per.protein === 0 && per.carbs === 0 && per.fat === 0;
+    if (!known || allZero) unknown.push(name);
   }
   const water = parsed.water || 0;
   if (water > 0) nutrition.logWater(water);
@@ -348,8 +358,23 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
   return { intent, response: parts.join(" ") || "Done, sir.", data, ai_meta: parsed.ai_meta };
 }
 
+// "clear today" / "reset my log" / "start today over" — a deterministic wipe (no AI call).
+function isClearToday(p) {
+  const t = (p || "").toLowerCase();
+  return (/\b(clear|reset|wipe|erase|start over|restart)\b/.test(t)
+          && /\b(today|day|log|count|everything|it all|the food|my food)\b/.test(t))
+      || /\bclear (my )?(food )?log\b/.test(t) || /\bstart (the )?day over\b/.test(t);
+}
+
 /** Top-level: resolve any pending confirmation, else parse and (ASK if unsure/ambiguous) apply. */
 async function handleNutrition(prompt) {
+  // 0) explicit "clear today" — reset the day (deterministic, no AI)
+  if (isClearToday(prompt)) {
+    nutrition.clearDay();
+    nutrition.clearPendingAction();
+    return { intent: "nutrition_clear", response: "Cleared today's log, sir — fresh start, everything's back to zero.", data: { cleared: true }, ai_meta: { provider: null, model: null } };
+  }
+
   // 1) resolve a pending confirmation first (expires after 5 min so it's never stale)
   let pending = nutrition.getPendingAction();
   if (pending && pending.ts && Date.now() - pending.ts > 300000) { nutrition.clearPendingAction(); pending = null; }

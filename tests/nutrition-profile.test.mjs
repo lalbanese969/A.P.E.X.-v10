@@ -132,5 +132,19 @@ console.log("\n[10] Safe removal (one vs all) + pending confirmation store");
   ok("pending confirmation clears", nutrition.getPendingAction() === null);
 }
 
+console.log("\n[11] Precise matching (no 'ham rolls' -> 'ham' collision) + clear today");
+{
+  nutrition.setFood({ name: "Ham", calories: 90, protein: 15, carbs: 1, fat: 3, fiber: 0 });
+  ok("'ham rolls' does NOT resolve to the saved 'ham'", nutrition.findFood("ham rolls") === null);
+  ok("plural/article still match: 'the bananas' -> banana", nutrition.findFood("the bananas")?.name?.toLowerCase() === "banana");
+  // clear today
+  nutrition.logFood({ name: "Test food", qty: 1, calories: 200, protein: 10, carbs: 20, fat: 5, fiber: 2 });
+  nutrition.logWater(20);
+  ok("something is logged before clear", nutrition.dayTotals().calories > 0 || nutrition.dayTotals().water_oz > 0);
+  nutrition.clearDay();
+  const t = nutrition.dayTotals();
+  ok("clearDay zeroes calories + water + entries", t.calories === 0 && t.water_oz === 0 && t.entries === 0);
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
