@@ -695,6 +695,94 @@ body {
 }
 #sim-close:hover { background: rgba(255, 122, 0, 0.16); }
 
+/* ============================================================================
+   [STYLE:BIG]  —  fullscreen "Workout APEX" takeover (/big): chat left, panels right
+   ============================================================================ */
+#big-overlay { position: fixed; inset: 0; z-index: 300; display: none; background: var(--color-black); }
+#big-overlay.on { display: block; }
+#big-hex { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#big-close {
+  position: absolute; top: 16px; right: 18px; z-index: 3; display: none;
+  align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px;
+  border: 1px solid var(--line); background: rgba(18, 18, 20, 0.82);
+  color: var(--color-orange); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#big-close:hover { background: rgba(255, 122, 0, 0.16); }
+
+/* the whole workout UI — fades up as the honeycomb clears (opacity driven by [JS:TAKEOVER]) */
+#big-app {
+  position: absolute; inset: 0; z-index: 1; opacity: 0;
+  display: flex; flex-direction: column;
+  background: radial-gradient(120% 90% at 50% -10%, rgba(255, 122, 0, 0.06), transparent 60%), var(--color-black);
+}
+.big-header { flex-shrink: 0; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 118px 0 22px; border-bottom: 1px solid var(--line); }
+.big-header .big-mark { width: 20px; height: 20px; color: var(--color-orange); }
+.big-header .big-logo { font-weight: 800; letter-spacing: 1px; font-size: 15px; }
+.big-header .big-logo .accent { color: var(--color-orange); }
+.big-chip { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-orange); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.big-header .big-sub { margin-left: auto; font-size: 12px; color: var(--color-text-dim); }
+
+.big-body { flex: 1; display: flex; min-height: 0; }
+
+/* --- left: live APEX chat --- */
+.big-chat { width: 40%; min-width: 320px; max-width: 520px; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+#big-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.big-input-bar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 12px 16px 16px; background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent); }
+.big-input-bar input { flex: 1; padding: 12px 18px; border-radius: 22px; border: 1px solid var(--line-soft); background: rgba(22, 22, 25, 0.85); color: var(--color-text); font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+.big-input-bar input:focus { border-color: rgba(255, 122, 0, 0.5); box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.08); }
+.big-input-bar input::placeholder { color: var(--color-text-dim); }
+.big-input-bar .send-btn { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; border: none; background: var(--color-orange); color: #160b00; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: filter 0.15s; }
+.big-input-bar .send-btn svg { width: 18px; height: 18px; }
+.big-input-bar .send-btn:hover { filter: brightness(1.12); }
+
+/* --- right: workout + nutrition panels --- */
+.big-panels { flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.bcard { background: var(--color-panel); border: 1px solid var(--line-soft); border-radius: 12px; padding: 18px; }
+.bcard-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.bcard-title { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text); }
+.bcard-note { font-size: 11px; color: var(--color-text-dim); }
+
+/* macros */
+.macro-row { margin-bottom: 12px; }
+.macro-row:last-child { margin-bottom: 0; }
+.macro-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.macro-top .ml { color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+.macro-top .mv { color: var(--color-text); font-size: 12.5px; }
+.macro-top .mv b { color: var(--color-orange); font-weight: 700; }
+.macro-bar { height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.macro-fill { height: 100%; border-radius: 999px; background: var(--color-orange); transition: width 0.25s; }
+.macro-fill.c { background: var(--color-orange-soft); }
+.macro-fill.f { background: #c76a12; }
+
+/* food log */
+.food-input { display: flex; gap: 8px; margin-bottom: 12px; }
+.food-input input { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line-soft); background: rgba(22, 22, 25, 0.85); color: var(--color-text); font-size: 13px; font-family: inherit; outline: none; }
+.food-input input:focus { border-color: rgba(255, 122, 0, 0.5); }
+.food-input button { padding: 0 15px; border-radius: 8px; border: none; background: var(--color-orange); color: #160b00; font-weight: 700; font-size: 13px; cursor: pointer; }
+.food-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.food-item:first-child { border-top: none; }
+.food-item .fname { color: var(--color-text); }
+.food-item .fkcal { color: var(--color-orange-soft); font-size: 12px; white-space: nowrap; margin-left: 10px; }
+
+/* today's workout */
+.wo-ex { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
+.wo-ex:first-child { border-top: none; }
+.wo-check { width: 20px; height: 20px; flex-shrink: 0; border-radius: 6px; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; color: transparent; }
+.wo-ex.done .wo-check { background: var(--color-orange); border-color: var(--color-orange); color: #160b00; }
+.wo-ex.done .wo-name { color: var(--color-text-dim); text-decoration: line-through; }
+.wo-name { flex: 1; font-size: 13.5px; color: var(--color-text); }
+.wo-sets { font-size: 12px; color: var(--color-text-dim); }
+.wo-progress { margin-top: 14px; display: flex; align-items: center; gap: 12px; }
+.wo-progress .wp-bar { flex: 1; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.wo-progress .wp-fill { height: 100%; background: var(--color-orange); border-radius: 999px; transition: width 0.25s; }
+.wo-progress .wp-txt { font-size: 12px; color: var(--color-text-dim); white-space: nowrap; }
+.wo-streak { margin-top: 12px; font-size: 12px; color: var(--color-orange-soft); }
+
+@media (max-width: 760px) {
+  .big-body { flex-direction: column; }
+  .big-chat { width: auto; max-width: none; border-right: none; border-bottom: 1px solid var(--line); min-height: 42%; }
+}
+
 /* --- scrollbar styling (orange-tinted) --- */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -844,6 +932,39 @@ body {
   <iframe id="sim-iframe" title="A.P.E.X. Simulations"></iframe>
   <canvas id="sim-hex"></canvas>
   <button id="sim-close">✕ Exit sim</button>
+</div>
+
+<!-- ==========================================================================
+     [HTML:BIG]  —  "Workout APEX" fullscreen takeover (/big): live chat on the
+     left, workout + nutrition panels on the right. Panels filled by [JS:BIG].
+     ========================================================================== -->
+<div id="big-overlay">
+  <div id="big-app">
+    <div class="big-header">
+      <svg class="big-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+        <path d="M7 3h10l5 9-5 9H7L2 12z"/><path d="M9.5 8.5h5l2.5 3.5-2.5 3.5h-5L7 12z" stroke-width="1.1" opacity="0.55"/>
+      </svg>
+      <div class="big-logo"><span class="accent">A</span>.P.<span class="accent">E</span>.X.</div>
+      <span class="big-chip">Workout</span>
+      <span class="big-sub">Fuel &amp; train, sir</span>
+    </div>
+    <div class="big-body">
+      <!-- left: real APEX chat (same brain as the main chat) -->
+      <div class="big-chat">
+        <div id="big-messages"></div>
+        <div class="big-input-bar">
+          <input id="big-input" type="text" placeholder="Tell APEX what you ate, or ask for a plan…" autocomplete="off" />
+          <button class="send-btn" id="big-send" aria-label="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+      </div>
+      <!-- right: workout + nutrition panels (mock for now; function later) -->
+      <div class="big-panels" id="big-panels"><!-- filled by [JS:BIG] --></div>
+    </div>
+  </div>
+  <canvas id="big-hex"></canvas>
+  <button id="big-close">✕ Exit</button>
 </div>
 
 <script type="module">
@@ -1814,16 +1935,13 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 
 
 /* ============================================================================
-   [JS:SIM]  —  fullscreen Simulations takeover.
-   Sequence: a honeycomb grid GROWS in over the whole screen, then a soft wave
-   CLEARS the hexes from the center outward (leaving a glowing honeycomb frame
-   around the edges) and reveals the sim in an iframe. Esc / Exit reverses it.
+   [JS:TAKEOVER]  —  reusable fullscreen honeycomb takeover.
+   A honeycomb grid GROWS in over the whole screen, then a soft wave CLEARS the
+   hexes from the center outward (leaving a glowing honeycomb frame around the
+   edges) and fades in `content` underneath. Esc / the close button reverses it.
+   Shared by /open sim (iframe) and /big (the Workout APEX panel).
    ============================================================================ */
-(function () {
-  const overlay = document.getElementById("sim-overlay");
-  const iframe = document.getElementById("sim-iframe");
-  const canvas = document.getElementById("sim-hex");
-  const closeBtn = document.getElementById("sim-close");
+function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   const ctx = canvas.getContext("2d");
 
   const OPEN_MS = 1350;   // animation length
@@ -1832,7 +1950,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
   const BAND = 66;        // px band around the edges that stays lit (the frame)
   const FEATHER = 140;    // softness of the clearing wavefront
 
-  let hexes = [], W = 0, H = 0, raf = null, startTs = 0, opening = true, t = 0;
+  let hexes = [], W = 0, H = 0, raf = null, startTs = 0, opening = true, t = 0, firstOpened = false;
 
   function build() {
     const dpr = window.devicePixelRatio || 1;
@@ -1883,7 +2001,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
       } else if (edge) {
         a = 1;                                             // edge frame always lit
       } else if (dist <= rr - FEATHER) {
-        a = 0;                                             // fully cleared (iframe shows)
+        a = 0;                                             // fully cleared (content shows)
       } else if (dist < rr) {
         a = (dist - (rr - FEATHER)) / FEATHER;             // soft wavefront
       } else {
@@ -1892,7 +2010,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
       const scale = t <= GROW ? (0.25 + 0.75 * grow) : 1;
       if (a > 0.02) drawHex(h.x, h.y, HEXR * scale, a);
     }
-    iframe.style.opacity = t <= GROW ? 0 : Math.min(1, rev * 1.4);
+    content.style.opacity = t <= GROW ? 0 : Math.min(1, rev * 1.4);
   }
   function frame(ts) {
     if (!startTs) startTs = ts;
@@ -1902,18 +2020,18 @@ import { APEX_GREETINGS } from "./js/seedData.js";
     if (prog < 1) { raf = requestAnimationFrame(frame); }
     else {
       raf = null; startTs = 0;
-      if (opening) { iframe.style.opacity = 1; closeBtn.style.display = "flex"; }
+      if (opening) { content.style.opacity = 1; closeBtn.style.display = "flex"; }
       else { overlay.classList.remove("on"); ctx.clearRect(0, 0, W, H); }
     }
   }
 
   function open() {
     if (overlay.classList.contains("on")) return;
-    if (!iframe.getAttribute("src")) iframe.setAttribute("src", "apex-simulations/index.html");
+    if (!firstOpened) { firstOpened = true; if (onFirstOpen) onFirstOpen(); }
     overlay.classList.add("on");
     build();
     closeBtn.style.display = "none";
-    iframe.style.opacity = 0;
+    content.style.opacity = 0;
     opening = true; startTs = 0;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
@@ -1929,9 +2047,174 @@ import { APEX_GREETINGS } from "./js/seedData.js";
     if (e.key === "Escape" && overlay.classList.contains("on")) close();
   });
 
+  return { open, close };
+}
+
+/* /open sim — the Simulations lab, lazily loaded into an iframe on first open. */
+(function () {
+  const iframe = document.getElementById("sim-iframe");
+  const sim = makeTakeover({
+    overlay: document.getElementById("sim-overlay"),
+    canvas: document.getElementById("sim-hex"),
+    closeBtn: document.getElementById("sim-close"),
+    content: iframe,
+    onFirstOpen: () => iframe.setAttribute("src", "apex-simulations/index.html"),
+  });
   window.APEX = window.APEX || {};
-  window.APEX.openSim = open;
-  window.APEX.closeSim = close;
+  window.APEX.openSim = sim.open;
+  window.APEX.closeSim = sim.close;
+})();
+
+
+/* ============================================================================
+   [JS:BIG]  —  "Workout APEX" (/big). A live APEX chat on the LEFT (same brain
+   as the main chat) and workout + nutrition panels on the RIGHT.
+   UI-FIRST: the panels are MOCK for now (real nutrition estimation + workout
+   logic come later); the chat is fully wired. See CLAUDE.md build philosophy.
+   ============================================================================ */
+(function () {
+  const big = makeTakeover({
+    overlay: document.getElementById("big-overlay"),
+    canvas: document.getElementById("big-hex"),
+    closeBtn: document.getElementById("big-close"),
+    content: document.getElementById("big-app"),
+  });
+  window.APEX = window.APEX || {};
+  window.APEX.closeBig = big.close;
+
+  /* ---------- right-side panels (mock data — placeholder until function lands) ---------- */
+  const macros = [
+    { label: "Calories", val: 1450, goal: 2400, unit: "kcal", cls: "" },
+    { label: "Protein",  val: 96,   goal: 180,  unit: "g",    cls: "p" },
+    { label: "Carbs",    val: 150,  goal: 260,  unit: "g",    cls: "c" },
+    { label: "Fat",      val: 44,   goal: 70,   unit: "g",    cls: "f" },
+  ];
+  const foods = [
+    { name: "Oatmeal + banana",     kcal: 320 },
+    { name: "Chicken & rice bowl",  kcal: 610 },
+    { name: "Protein shake",        kcal: 180 },
+  ];
+  const workout = {
+    title: "Push Day",
+    ex: [
+      { name: "Bench Press",             sets: "4 × 8",  done: false },
+      { name: "Overhead Press",          sets: "3 × 10", done: false },
+      { name: "Incline Dumbbell Press",  sets: "3 × 10", done: false },
+      { name: "Cable Fly",               sets: "3 × 12", done: false },
+      { name: "Triceps Pushdown",        sets: "3 × 15", done: false },
+    ],
+  };
+
+  const panels = document.getElementById("big-panels");
+
+  function macroRow(m) {
+    const pct = Math.min(100, Math.round((m.val / m.goal) * 100));
+    return `<div class="macro-row">
+      <div class="macro-top"><span class="ml">${m.label}</span>
+        <span class="mv"><b>${m.val}</b> / ${m.goal} ${m.unit}</span></div>
+      <div class="macro-bar"><div class="macro-fill ${m.cls}" style="width:${pct}%"></div></div>
+    </div>`;
+  }
+  function foodRow(f) {
+    return `<div class="food-item"><span class="fname">${f.name}</span><span class="fkcal">≈ ${f.kcal} kcal</span></div>`;
+  }
+  function exRow(e, i) {
+    return `<div class="wo-ex ${e.done ? "done" : ""}" data-i="${i}">
+      <span class="wo-check"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+      <span class="wo-name">${e.name}</span><span class="wo-sets">${e.sets}</span></div>`;
+  }
+  function renderPanels() {
+    const done = workout.ex.filter((e) => e.done).length;
+    const woPct = Math.round((done / workout.ex.length) * 100);
+    panels.innerHTML = `
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">Today · Macros</span><span class="bcard-note">vs. goal</span></div>
+        ${macros.map(macroRow).join("")}
+      </div>
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">Food Log</span><span class="bcard-note">estimates are placeholder</span></div>
+        <div class="food-input">
+          <input id="food-name" type="text" placeholder="What did you eat?" autocomplete="off" />
+          <button id="food-add">Add</button>
+        </div>
+        <div id="food-list">${foods.map(foodRow).join("")}</div>
+      </div>
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">Today · ${workout.title}</span><span class="bcard-note">tap to check off</span></div>
+        <div id="wo-list">${workout.ex.map(exRow).join("")}</div>
+        <div class="wo-progress">
+          <div class="wp-bar"><div class="wp-fill" style="width:${woPct}%"></div></div>
+          <span class="wp-txt">${done}/${workout.ex.length} done</span>
+        </div>
+        <div class="wo-streak">Streak: 5 days — keep it up, sir.</div>
+      </div>`;
+    wirePanels();
+  }
+  function wirePanels() {
+    const nameInp = document.getElementById("food-name");
+    function addFood() {
+      const v = nameInp.value.trim();
+      if (!v) return;
+      const kcal = 150 + Math.round(Math.random() * 400);   // mock estimate until real nutrition logic lands
+      foods.push({ name: v, kcal });
+      macros[0].val += kcal;                                // reflect it in the calories bar so it feels alive
+      renderPanels();
+      document.getElementById("food-name").focus();
+    }
+    document.getElementById("food-add").addEventListener("click", addFood);
+    nameInp.addEventListener("keydown", (e) => { if (e.key === "Enter") addFood(); });
+
+    panels.querySelectorAll("#wo-list .wo-ex").forEach((el) => {
+      el.addEventListener("click", () => {
+        const i = +el.dataset.i;
+        workout.ex[i].done = !workout.ex[i].done;
+        renderPanels();
+      });
+    });
+  }
+  renderPanels();
+
+  /* ---------- left-side chat (live — same pipeline as the main chat) ---------- */
+  const messages = document.getElementById("big-messages");
+  const input = document.getElementById("big-input");
+  const sendBtn = document.getElementById("big-send");
+  let greeted = false;
+
+  function addMessage(text, who) {
+    const div = document.createElement("div");
+    div.className = "msg " + who;
+    div.textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+  async function send() {
+    const text = input.value.trim();
+    if (!text) return;
+    addMessage(text, "user");
+    input.value = "";
+    const thinking = addMessage("Thinking, sir…", "apex");
+    try {
+      const data = await pipelineMod.handlePrompt(text, {});
+      thinking.textContent = data.apex_response;
+      console.log("[A.P.E.X./big]", { intent: data.intent, ai: data.ai_meta });
+    } catch (err) {
+      console.error(err);
+      thinking.textContent = "(something went sideways, sir — check DevTools console)";
+    }
+  }
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+  // greet once (the first time /big opens) and focus the input after the takeover
+  window.APEX.openBig = function () {
+    if (!greeted) {
+      greeted = true;
+      addMessage("Workout mode, sir. Tell me what you ate and I'll estimate the nutrition, or ask me for a plan.", "apex");
+    }
+    big.open();
+    setTimeout(() => input.focus(), 700);
+  };
 })();
 
 
@@ -1945,6 +2228,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
   const messages = document.getElementById("messages");
 
   const COMMANDS = [
+    { key: "/big", desc: "Workout APEX — food & training", run: () => window.APEX.openBig() },
     { key: "/open sim", desc: "Open the Simulations lab", run: () => window.APEX.openSim() },
     { key: "/help", desc: "Show available commands", run: showHelp },
   ];

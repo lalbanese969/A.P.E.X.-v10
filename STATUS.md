@@ -59,6 +59,16 @@ more mature pipeline is ever needed again.
   is how it talks to the user, never how it writes on his behalf to someone else. A bigger
   personality/voice overhaul is still planned separately (prompt being drafted by another AI) and
   may extend or replace this.
+- **Slash commands + fullscreen "takeover" modes** — type `/` in the chat box for a command
+  palette. `/open sim` opens the Simulations lab (embedded iframe); `/big` opens **Workout APEX**.
+  Both use one shared `[JS:TAKEOVER]` factory in `index.html` (honeycomb grid grows in, then clears
+  from the center leaving a glowing edge frame, revealing the content; Esc / Exit reverses it).
+  **Workout APEX (`/big`)** = a live APEX chat on the LEFT (same pipeline/brain as the main chat) +
+  workout & nutrition panels on the RIGHT: **Today · Macros** (calories/protein/carbs/fat vs goal),
+  **Food Log** ("what did you eat?" → adds an item), and **Today · Push Day** (tap exercises to
+  check off, with a progress bar + streak). **UI-first: the right panels are MOCK for now** — real
+  nutrition estimation and workout logic come later. (Verified via Playwright: takeover reveal,
+  food-add, check-off, Esc close, and `/open sim` still works — no console errors.)
 - **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
 
 ## 📦 Archived (not deleted)
