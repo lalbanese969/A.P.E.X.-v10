@@ -146,28 +146,5 @@ console.log("\n[11] Precise matching (no 'ham rolls' -> 'ham' collision) + clear
   ok("clearDay zeroes calories + water + entries", t.calories === 0 && t.water_oz === 0 && t.entries === 0);
 }
 
-console.log("\n[12] Food database lookup (per base unit) + no double-count");
-{
-  const foodDb = await import("../js/foodDb.js");
-  const turkey = foodDb.lookupFood("turkey");
-  eq("turkey -> lean per oz (38 kcal, 9p, 1 fat)", [turkey.unit, turkey.calories, turkey.protein, turkey.fat], ["oz", 38, 9, 1]);
-  ok("'turkey breast' also resolves", foodDb.lookupFood("turkey breast")?.key === "turkey_breast");
-  ok("'steak' -> lean sirloin (fat 2)", foodDb.lookupFood("steak")?.key === "sirloin_steak" && foodDb.lookupFood("steak").fat === 2);
-  ok("'beef' -> lean 90/10 (fat 2)", foodDb.lookupFood("beef")?.key === "ground_beef_90_10" && foodDb.lookupFood("beef").fat === 2);
-  const belvita = foodDb.lookupFood("belvita chocolate sandwich");
-  eq("belvita per pack (230 kcal)", [belvita.unit, belvita.calories], ["pack", 230]);
-  ok("'belvita' alias resolves", foodDb.lookupFood("belvita")?.key === "belvita_chocolate_sandwich");
-  ok("'chicken' -> chicken_breast", foodDb.lookupFood("chicken")?.key === "chicken_breast");
-  ok("expanded DB: tofu resolves (per oz)", foodDb.lookupFood("tofu")?.unit === "oz");
-  ok("expanded DB: oatmeal -> oatmeal_cooked", foodDb.lookupFood("oatmeal")?.key === "oatmeal_cooked");
-  ok("expanded DB: 'oj' -> orange juice", foodDb.lookupFood("oj")?.key === "orange_juice");
-  ok("expanded DB: 'protein shake' -> pea protein", foodDb.lookupFood("protein shake")?.key === "pea_protein_shake");
-  ok("expanded DB has 60+ foods", Object.keys(foodDb.FOOD_DB).length >= 60);
-  ok("unknown food -> null", foodDb.lookupFood("dragon fruit smoothie") === null);
-  // the fix: nutrition = per-unit × qty computed in code (was double-counted before)
-  ok("10 oz turkey = 380 kcal / 90 g protein (NOT 4200/900)", turkey.calories * 10 === 380 && turkey.protein * 10 === 90);
-  ok("2 belvita packs = 460 kcal / 6 g protein (NOT 920/12)", belvita.calories * 2 === 460 && belvita.protein * 2 === 6);
-}
-
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

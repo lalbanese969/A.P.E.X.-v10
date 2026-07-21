@@ -1,13 +1,10 @@
 /* ============================================================================
-   [MODULE: foodDb.js]
-   A.P.E.X. default nutrition database (USDA-based, per base unit). These are the
-   REFERENCE values fed to the coach so its estimates are accurate and consistent
-   (e.g. turkey breast is ~9g protein/oz, not 100g). The AI multiplies by the
-   quantity the user gives, assumes COOKED weight for meats unless told raw, and
-   rounds to whole numbers.
-
-   Precedence at log time: a food you've CORRECTED (in food memory) > this database
-   > a fresh AI estimate. Edit freely — it's just data.
+   [MODULE: foodDb.js]  —  DORMANT (kept, not currently wired into the pipeline).
+   A curated USDA-based nutrition database, per base unit. We tried using it as the
+   authoritative source (computing macros in code), but the coach estimates felt
+   better left to the AI's own guessing, so pipeline.js currently just lets the AI
+   estimate. This file is preserved so it's easy to re-enable later (import
+   lookupFood + prefer it over the AI estimate). Edit freely — it's just data.
    ============================================================================ */
 
 export const FOOD_DB = {
