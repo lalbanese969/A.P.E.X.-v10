@@ -20,7 +20,7 @@ import * as connections from "./connections.js";
 import * as settingsMod from "./settings.js";
 import * as profile from "./profile.js";
 import * as nutrition from "./nutrition.js";
-import { foodDbPromptBlock } from "./foodDb.js";
+import { foodDbPromptBlock, lookupFood } from "./foodDb.js";
 import { runTask, AIError } from "./aiCenter.js";
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
@@ -234,9 +234,15 @@ async function parseNutrition(prompt) {
     "- Put a food in `foods` ONLY if the user is reporting they ACTUALLY ATE or DRANK it (\"I ate\", \"I had\", " +
     "\"for lunch I had\", \"just finished\"). If they are ASKING about a food, its calories, whether it's dairy-free, " +
     "considering it, or it's hypothetical/future — DO NOT log it; foods:[].\n" +
-    "- Use the REFERENCE VALUES below (USDA-based) whenever a food matches one (or an alias). Macros are PER ONE unit " +
-    "the user used; qty = how many of that unit. Convert item counts using the reference (e.g. 'a chicken breast' ≈ 6 oz). " +
-    "Assume COOKED weight for meats unless told raw. Round to whole numbers. NEVER 0 protein for meat/eggs/fish/beans.\n" +
+    "- CRITICAL — macros are for ONE SINGLE unit ONLY (1 oz, 1 pack, 1 egg, 1 cup). DO NOT multiply by qty yourself; " +
+    "the app multiplies per-unit × qty. WRONG: '10 oz turkey' -> calories 420. RIGHT: {name:'turkey breast', qty:10, " +
+    "unit:'oz', calories:42, protein:9, carbs:0, fat:1} (per OUNCE). '2 belvita packs' -> {name:'belvita chocolate " +
+    "sandwich', qty:2, unit:'pack', calories:230, protein:3, carbs:27, fat:8} (per PACK, not 460).\n" +
+    "- For MEAT & FISH ALWAYS use unit 'oz' with qty = number of ounces (convert items: 1 chicken breast≈6oz, " +
+    "1 pork chop≈4oz, 1 steak≈8oz, 3 slices bacon≈1.5oz). Keep meat in oz.\n" +
+    "- Use the REFERENCE VALUES below (USDA-based, per their listed unit) whenever a food matches one (or an alias). " +
+    "Assume COOKED weight for meats unless told raw. Round to whole numbers. ALWAYS give your best non-zero estimate — " +
+    "NEVER 0 protein for meat/eggs/fish/beans, and never refuse to estimate.\n" +
     "- Aliases: chicken=chicken breast, turkey=turkey breast, steak=sirloin steak (unless a cut is named), " +
     "'ground beef'=90/10 unless specified, pork=pork tenderloin, rice=white rice cooked, potato=russet, bread=white bread.\n" +
     "- If a meat's type is unspecified (e.g. 'steak', 'ground beef'), use the lean/common default and set `note` " +
@@ -318,33 +324,49 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
     data.correction = res.food.name;
   }
 
-  // log foods
+  // log foods — precedence: your corrected memory > the USDA database (computed in
+  // code, so no double-counting) > the AI's own estimate.
+  const COUNT_UNITS = new Set(["each", "pack", "slice", "stalk", "serving", "item", "piece"]);
   const logged = [], dairy = [], unknown = [];
   for (const f of (parsed.foods || [])) {
     if (!f || !f.name) continue;
     const qty = Number(f.qty) || 1;
+    const uUnit = normUnit(f.unit);
+
+    let per, name, unit, source, fromMemory = false, isUnknown = false;
+
+    // 1) your corrected/taught food (same unit, real values) wins
     const known = nutrition.findFood(f.name);
-    // only REUSE remembered macros if they're valid AND in the SAME unit as this log —
-    // a saved "per oz" value must not be reused for "a whole breast", and an all-zero
-    // record must not poison the log.
-    const unitMatch = !normUnit(f.unit) || !normUnit(known?.per?.unit) || normUnit(f.unit) === normUnit(known?.per?.unit);
-    const knownUsable = known && unitMatch && (known.calories > 0 || known.protein > 0 || known.carbs > 0 || known.fat > 0);
-    const name = known ? known.name : f.name;
-    const aiPer = { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
-    const per = knownUsable
-      ? { calories: known.calories, protein: known.protein, carbs: known.carbs, fat: known.fat, fiber: known.fiber, sodium: known.sodium || 0 }
-      : aiPer;
-    // heal a blank/zero memory with the fresh estimate so it's right next time
-    if (known && !knownUsable && (aiPer.calories > 0 || aiPer.protein > 0)) {
-      nutrition.setFood({ name: known.name, ...aiPer, source: "ai_estimate" });
+    const memUnitOk = !uUnit || !normUnit(known?.per?.unit) || uUnit === normUnit(known?.per?.unit);
+    const knownUsable = known && memUnitOk && (known.calories > 0 || known.protein > 0 || known.carbs > 0 || known.fat > 0);
+
+    if (knownUsable) {
+      per = { calories: known.calories, protein: known.protein, carbs: known.carbs, fat: known.fat, fiber: known.fiber, sodium: known.sodium || 0 };
+      name = known.name; unit = known.per?.unit || f.unit || null; source = "memory"; fromMemory = true;
+    } else {
+      // 2) database (authoritative per-unit × qty in code — the AI's macros are ignored here)
+      const db = lookupFood(f.name);
+      const dbUnit = normUnit(db?.unit);
+      const dbCompatible = db && ((uUnit && dbUnit && uUnit === dbUnit) || (COUNT_UNITS.has(dbUnit) && (!uUnit || COUNT_UNITS.has(uUnit))));
+      if (dbCompatible) {
+        per = { calories: db.calories, protein: db.protein, carbs: db.carbs, fat: db.fat, fiber: +f.fiber || 0, sodium: 0 };
+        name = f.name; unit = db.unit; source = "database";
+        if (known && !knownUsable) nutrition.setFood({ name: known.name, ...per, per: { qty: 1, unit: db.unit }, source: "database" });
+      } else {
+        // 3) AI's best guess
+        per = { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
+        name = known ? known.name : f.name; unit = f.unit || null; source = "ai_estimate";
+        if (known && !knownUsable && (per.calories > 0 || per.protein > 0)) nutrition.setFood({ name: known.name, ...per, source: "ai_estimate" });
+        const allZero = per.calories === 0 && per.protein === 0 && per.carbs === 0 && per.fat === 0;
+        if (!known || allZero) isUnknown = true;
+      }
     }
-    nutrition.logFood({ name, qty, unit: f.unit || null, ...per,
-      source: knownUsable ? "memory" : "ai_estimate", confidence: knownUsable ? 0.9 : 0.4, dairy: !!f.maybe_dairy });
-    logged.push({ name, qty, calories: Math.round(per.calories * qty), fromMemory: knownUsable });
+
+    nutrition.logFood({ name, qty, unit, ...per,
+      source, confidence: source === "memory" ? 0.95 : source === "database" ? 0.9 : 0.4, dairy: !!f.maybe_dairy });
+    logged.push({ name, qty, calories: Math.round(per.calories * qty), fromMemory });
     if (f.maybe_dairy) dairy.push(name);
-    // ask to confirm a brand-new food, or when we still couldn't get real numbers (all zero)
-    const allZero = per.calories === 0 && per.protein === 0 && per.carbs === 0 && per.fat === 0;
-    if (!known || allZero) unknown.push(name);
+    if (isUnknown) unknown.push(name);
   }
   const water = parsed.water || 0;
   if (water > 0) nutrition.logWater(water);

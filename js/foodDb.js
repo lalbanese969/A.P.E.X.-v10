@@ -68,3 +68,37 @@ export function foodDbPromptBlock() {
     .map(([k, v]) => `${k.replace(/_/g, " ")} (per ${v.unit}): ${v.calories} kcal, ${v.protein}p, ${v.carbs}c, ${v.fat}f`)
     .join("\n");
 }
+
+// same precise key as nutrition.js: drop articles + trailing plural "s" per word
+const _key = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")
+  .replace(/\b(a|an|the|some|of|my|his|her|our)\b/g, " ").trim()
+  .split(/\s+/).filter(Boolean).map((w) => w.replace(/s$/, "")).join(" ");
+
+/** Look up a spoken food name against the database (aliases + exact + token overlap).
+    Returns { key, unit, calories, protein, carbs, fat, fiber } per ONE base unit, or null.
+    This is used to compute nutrition IN CODE (per-unit × qty), so the AI never has to
+    do the multiplication (which is where it went wrong: "10 oz turkey" -> 4200 kcal). */
+export function lookupFood(name) {
+  const k = _key(name);
+  if (!k) return null;
+  const pack = (key) => { const v = FOOD_DB[key]; return { key, unit: v.unit, calories: v.calories, protein: v.protein, carbs: v.carbs, fat: v.fat, fiber: 0 }; };
+
+  // 1) alias exact
+  for (const [al, key] of Object.entries(FOOD_ALIASES)) if (_key(al) === k) return pack(key);
+  // 2) db key exact
+  for (const key of Object.keys(FOOD_DB)) if (_key(key.replace(/_/g, " ")) === k) return pack(key);
+  // 3) best token overlap where one name's tokens fully contain the other's
+  const kt = new Set(k.split(" "));
+  let best = null, bestScore = 0;
+  for (const key of Object.keys(FOOD_DB)) {
+    const dt = new Set(_key(key.replace(/_/g, " ")).split(" "));
+    const inter = [...dt].filter((x) => kt.has(x)).length;
+    if ((inter === dt.size || inter === kt.size) && inter > bestScore) { best = key; bestScore = inter; }
+  }
+  for (const [al, key] of Object.entries(FOOD_ALIASES)) {
+    const at = new Set(_key(al).split(" "));
+    const inter = [...at].filter((x) => kt.has(x)).length;
+    if (inter === at.size && inter > bestScore) { best = key; bestScore = inter; }
+  }
+  return best ? pack(best) : null;
+}
