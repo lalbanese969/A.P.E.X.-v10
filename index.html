@@ -839,13 +839,39 @@ body {
 
 /* --- responsive: iPad = side-by-side; iPhone (narrow) = stacked, content on TOP, chat at BOTTOM --- */
 @media (max-width: 720px) {
-  .big-body { flex-direction: column; }          /* chat is first in the DOM... */
-  .big-chat { width: auto; max-width: none; border-right: none; border-top: 1px solid var(--line); order: 2; max-height: 44%; }
-  .big-panels { order: 1; }                       /* ...so order puts panels on top, chat at the bottom */
+  .big-body { flex-direction: column; }
+  /* order puts panels on top (1), the drag divider (2), then chat at the bottom (3) */
+  .big-panels { order: 1; flex: 0 0 46%; min-height: 0; }   /* top ~46% by default; draggable */
+  #grab-big { display: flex; order: 2; }
+  .big-chat { width: auto; max-width: none; border-right: none; border-top: none; order: 3; flex: 1 1 0; min-height: 0; }
   .big-header { padding: 0 96px 0 16px; }
   .big-tabbody { padding: 16px; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ============================================================================
+   [STYLE:GRAB]  —  the draggable top/bottom divider on iPhone. It's a brighter,
+   thicker separator you can RESIZE, but only after a press-and-hold (~1s) arms it
+   — armed it turns RED — so you never nudge it by accident. Hidden on wide screens.
+   ============================================================================ */
+.vgrab {
+  display: none;                 /* only shown inside the phone media queries */
+  align-items: center; justify-content: center;
+  height: 18px; flex-shrink: 0; position: relative; z-index: 5;
+  background: var(--color-panel);
+  border-top: 2px solid var(--color-orange);            /* brighter + thicker line */
+  box-shadow: 0 0 10px rgba(255, 122, 0, 0.45);
+  touch-action: none; cursor: grab;
+  -webkit-user-select: none; user-select: none;
+}
+.vgrab::before {
+  content: ""; width: 46px; height: 4px; border-radius: 999px;
+  background: var(--color-orange); opacity: 0.95; transition: background 0.15s, width 0.15s;
+}
+.vgrab.holding { border-top-color: #ffce7a; }           /* while you're holding to arm */
+.vgrab.holding::before { background: #ffce7a; }
+.vgrab.armed { border-top-color: #ff3b30; box-shadow: 0 0 16px rgba(255, 59, 48, 0.75); cursor: grabbing; } /* RED = movable */
+.vgrab.armed::before { background: #ff3b30; width: 62px; }
 
 /* --- scrollbar styling (orange-tinted) --- */
 ::-webkit-scrollbar { width: 8px; }
@@ -878,10 +904,11 @@ body {
     gap: 7px;
     padding: 9px 11px;
     border-right: none;
-    border-bottom: 1px solid var(--line);
-    max-height: 25vh;                 /* top quarter-ish; the chat gets the other ~3/4 */
+    border-bottom: none;              /* the drag divider (#grab-main) is the separator now */
+    max-height: 25vh;                 /* top quarter-ish by default; draggable */
     overflow-y: auto;
   }
+  #grab-main { display: flex; }       /* show the draggable divider on phone */
   #sidebar-left .nav-label { display: none; }   /* no "NAVIGATION" header on phone */
   #status-strip { display: none; }              /* hide the key/status strip on phone */
 
@@ -977,6 +1004,9 @@ body {
       <div class="st-row"><span class="st-dot" id="st-accounts"></span><span id="st-accounts-txt">Accounts …</span></div>
     </div>
   </aside>
+
+  <!-- iPhone-only draggable divider between the top nav bar and the chat (hold ~1s to arm) -->
+  <div class="vgrab" id="grab-main" title="Hold to move"></div>
 
   <!-- ----------------------------------------------------------------------
        [HTML:CHAT]  —  center chat panel
@@ -1083,6 +1113,8 @@ body {
       </div>
       <!-- right: workout + nutrition panels (mock for now; function later) -->
       <div class="big-panels" id="big-panels"><!-- filled by [JS:BIG] --></div>
+      <!-- iPhone-only draggable divider between the panels (top) and the chat (bottom) -->
+      <div class="vgrab" id="grab-big" title="Hold to move"></div>
     </div>
   </div>
   <canvas id="big-hex"></canvas>
@@ -2089,10 +2121,10 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   const ctx = canvas.getContext("2d");
 
-  // --- timeline (ms) --- grow slow & organic, brief hold, slightly faster clear
-  const GROW_MS = 2600, HOLD_MS = 250, CLEAR_MS = 1500;
+  // --- timeline (ms) --- grow (organic fill), brief hold, then clear (reveal)
+  const GROW_MS = 1700, HOLD_MS = 250, CLEAR_MS = 1500;   // open ≈ 3.45s (was ~4.35s)
   const TOTAL = GROW_MS + HOLD_MS + CLEAR_MS;
-  const CLOSE_MS = 1400;          // reverse is quicker
+  const CLOSE_MS = 1400;          // closing speed unchanged (user likes it fast)
   const BAND = 0.16;              // softness of each wavefront (fraction of progress)
   const JITTER = 0.14;            // raggedness so growth/clear look organic, not a clean ring
   const HEXR = 30;                // hexagon size
@@ -2498,6 +2530,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       addMessage("Trainer mode, sir. Tell me what you ate and I'll estimate it, log your water, or program your session — let's get you fit.", "apex");
     }
     big.open();
+    if (window.APEX.applyBigSplit) window.APEX.applyBigSplit();   // restore saved iPhone split
     setTimeout(() => input.focus(), 700);
   };
 })();
@@ -2557,6 +2590,101 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
   }, true);
   document.addEventListener("click", (e) => { if (!palette.contains(e.target) && e.target !== input) closePalette(); });
+})();
+
+
+/* ============================================================================
+   [JS:RESIZE]  —  iPhone-only draggable top/bottom split.
+   Each grab bar resizes the TOP section (nav bar, or the /big panels) vs the chat
+   below it. To avoid accidental nudges you must PRESS-AND-HOLD the bar ~1s to arm
+   it (it turns RED), then drag; on release the split is saved to localStorage.
+   Only active on narrow (phone) layouts; on wider screens the bars are hidden and
+   any saved inline sizing is cleared so the normal layout is untouched.
+   ============================================================================ */
+(function () {
+  const HOLD_MS = 1000;
+
+  function makeResizer({ topEl, handleEl, storageKey, mq, minPx = 46, maxFrac = 0.72 }) {
+    if (!topEl || !handleEl) return;
+    const media = window.matchMedia(mq);
+    const container = () => topEl.parentElement;
+    let holdTimer = null, armed = false, startY = 0;
+
+    function setHeight(px) {
+      const box = container().getBoundingClientRect();
+      if (box.height < 1) return;
+      const clamped = Math.max(minPx, Math.min(box.height * maxFrac, px));
+      topEl.style.flex = "0 0 auto";
+      topEl.style.maxHeight = "none";
+      topEl.style.height = clamped + "px";
+    }
+    function clearInline() {
+      topEl.style.flex = ""; topEl.style.maxHeight = ""; topEl.style.height = "";
+    }
+    function applyStored() {
+      if (!media.matches) { clearInline(); return; }     // wide screen -> normal layout
+      const box = container().getBoundingClientRect();
+      if (box.height < 1) return;                          // container hidden (e.g. /big closed)
+      const frac = parseFloat(localStorage.getItem(storageKey));
+      if (isFinite(frac)) setHeight(frac * box.height);
+    }
+    function save() {
+      const box = container().getBoundingClientRect();
+      if (box.height < 1) return;
+      const h = topEl.getBoundingClientRect().height;
+      try { localStorage.setItem(storageKey, (h / box.height).toFixed(4)); } catch (e) {}
+    }
+    function disarm() { armed = false; handleEl.classList.remove("armed", "holding"); }
+
+    handleEl.addEventListener("pointerdown", (e) => {
+      if (!media.matches) return;
+      try { handleEl.setPointerCapture(e.pointerId); } catch (e2) {}
+      startY = e.clientY;
+      handleEl.classList.add("holding");
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(() => {                       // held long enough -> ARM (turn red)
+        armed = true; handleEl.classList.remove("holding"); handleEl.classList.add("armed");
+      }, HOLD_MS);
+    });
+    handleEl.addEventListener("pointermove", (e) => {
+      if (!media.matches) return;
+      if (!armed) {
+        // moved before it armed -> treat as a scroll/miss, cancel the hold (no accidental resize)
+        if (Math.abs(e.clientY - startY) > 10) { clearTimeout(holdTimer); handleEl.classList.remove("holding"); }
+        return;
+      }
+      e.preventDefault();
+      setHeight(e.clientY - container().getBoundingClientRect().top);
+    });
+    function end() {
+      clearTimeout(holdTimer);
+      if (armed) save();
+      disarm();
+    }
+    handleEl.addEventListener("pointerup", end);
+    handleEl.addEventListener("pointercancel", end);
+
+    window.addEventListener("resize", applyStored);
+    return { applyStored };
+  }
+
+  const mainR = makeResizer({
+    topEl: document.getElementById("sidebar-left"),
+    handleEl: document.getElementById("grab-main"),
+    storageKey: "apex.split.main",
+    mq: "(max-width: 600px)",
+  });
+  const bigR = makeResizer({
+    topEl: document.getElementById("big-panels"),
+    handleEl: document.getElementById("grab-big"),
+    storageKey: "apex.split.big",
+    mq: "(max-width: 720px)",
+  });
+
+  mainR && mainR.applyStored();
+  // /big is hidden at load (0-height container); re-apply its saved split once it opens
+  window.APEX = window.APEX || {};
+  window.APEX.applyBigSplit = () => bigR && setTimeout(bigR.applyStored, 60);
 })();
 </script>
 

@@ -64,7 +64,9 @@ more mature pipeline is ever needed again.
   Both use one shared `[JS:TAKEOVER]` factory in `index.html`: the honeycomb **grows out of the live
   background blobs** (seeded via `window.APEX.honeycombSeeds()`, branching organically), fills, then
   clears from the center until **every** hex is gone (no edge frame), revealing the content; Esc /
-  Exit reverses it. Timing knobs live at the top of the factory.
+  Exit reverses it. Open ≈ 3.45s, close ≈ 1.4s (knobs at the top of the factory). The takeover
+  canvas sizes to the overlay box (true fullscreen on iPhone, not window.innerHeight). Both modes are
+  also reachable from **left-nav buttons** (Workout, Simulations), not just the `/` palette.
 - **Workout APEX (`/big`) — APEX's personal-trainer mode.** Left = a **coach chat** on a *lighter*
   path (`pipeline.handleCoachPrompt`): fitness/nutrition-focused, **skips the email/calendar action
   machinery**, and is fed a one-line snapshot of today's numbers so it can coach on what you ate /
@@ -79,6 +81,13 @@ more mature pipeline is ever needed again.
   tabs, arrow-nav, water jug + macro totals, check-off, per-day persistence across reload, and the
   iPhone-stacked order — no console errors.) *Noted for later: a separate installable
   "today's workout" PWA you add to your phone's home screen for the gym.*
+- **Mobile app feel** — the page is **pinned** (body `position:fixed`, `overscroll-behavior:none`) so
+  only the inner areas scroll, never the page (no iPad/iPhone rubber-banding); web-app meta tags make
+  **Add to Home Screen** launch it fullscreen like a native app. On **iPhone** the home screen stacks:
+  nav buttons across the top, chat filling the bottom ~3/4. The top/bottom split (on both the main
+  interface and `/big`) has a **draggable divider** (`[JS:RESIZE]`, `[STYLE:GRAB]`): a brighter/thicker
+  orange line you **press-and-hold ~1s to arm** (it turns **red**) before dragging — so it's never
+  nudged by accident — and the split is saved to `localStorage` (`apex.split.main` / `apex.split.big`).
 - **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
 
 ## 📦 Archived (not deleted)
