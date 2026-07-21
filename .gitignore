@@ -16,6 +16,19 @@ __pycache__/
 .venv/
 venv/
 
+# --- Personal health / profile data (NEVER commit) ---
+# The live app keeps the profile + nutrition + health data in the browser's
+# localStorage (on-device only), so there's normally nothing to commit. But if you
+# ever export it or drop Apple Health files into the repo, keep them OUT of git.
+health-imports/
+apple-health-export/
+export.zip
+export.xml
+*.healthexport.*
+apex-profile-export*.json
+apex-export-*.json
+*.apexprofile.json
+
 # --- OS / editor junk ---
 .DS_Store
 Thumbs.db
