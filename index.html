@@ -855,6 +855,57 @@ body {
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 122, 0, 0.6); }
+
+/* ============================================================================
+   [STYLE:PHONE]  —  iPhone home layout. The 3-column desktop layout doesn't fit a
+   phone, so on narrow screens we STACK it: the nav buttons (New Chat, Calendar,
+   Email, Actions, Logs, Settings) become a compact bar of pills across the TOP,
+   and the chat fills the whole bottom (the big majority of the screen). The Tasks
+   sidebar is hidden (it's an empty placeholder). iPad/desktop are wider than this
+   breakpoint, so they keep the original 3-column layout untouched.
+   (Tuned for iPhone 17 Pro Max — ~440px wide in portrait.)
+   ============================================================================ */
+@media (max-width: 600px) {
+  #main { flex-direction: column; }
+
+  /* left sidebar -> a wrapping top bar of pill buttons */
+  #sidebar-left {
+    width: auto;
+    flex-shrink: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 11px;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    max-height: 25vh;                 /* top quarter-ish; the chat gets the other ~3/4 */
+    overflow-y: auto;
+  }
+  #sidebar-left .nav-label { display: none; }   /* no "NAVIGATION" header on phone */
+  #status-strip { display: none; }              /* hide the key/status strip on phone */
+
+  .new-chat-btn { order: -1; width: auto; padding: 9px 13px; }
+
+  .nav-list { flex-direction: row; flex-wrap: wrap; gap: 7px; flex: 1 1 auto; }
+  .nav-item {
+    padding: 8px 12px;
+    border: 1px solid var(--line-soft);
+    border-radius: 999px;             /* pill */
+    font-size: 13px;
+  }
+  .nav-item.active { border-color: var(--line); }
+  .nav-item.active::before { display: none; }   /* drop the vertical accent bar in pill mode */
+
+  /* chat = the big bottom area */
+  #chat { flex: 1; min-height: 0; }
+  #messages { padding: 16px; }
+
+  /* the Tasks sidebar has no room on a phone (and is an empty placeholder) */
+  #sidebar-right { display: none; }
+
+  #header { padding: 0 14px; }
+}
 </style>
 </head>
 
