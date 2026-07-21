@@ -66,9 +66,9 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
       aiMeta = ai;
     } else {
       // plain chat — but first, food memory works here too (only when it's clearly
-      // nutrition, so calendar/email intents above always take precedence).
+      // nutrition, or resolving a pending confirmation; calendar/email above win).
       let handledNutrition = false;
-      if (looksNutrition(prompt)) {
+      if (looksNutrition(prompt) || nutrition.getPendingAction()) {
         try {
           const nres = await handleNutrition(prompt);
           if (nres) {
@@ -114,9 +114,10 @@ export async function handleCoachPrompt(userPrompt, health = "") {
   const packet = memory.buildPacket(prompt);
   const result = { user_prompt: prompt, intent: "coach", ai_meta: { provider: null, model: null } };
 
-  // NUTRITION PATH: log food/water, learn code words, or accept corrections.
+  // NUTRITION PATH: log food/water, learn code words, corrections, removals — and
+  // resolve any pending confirmation (a bare "yes"/"just one" must reach it too).
   // Falls through to normal coaching if it wasn't actually a nutrition message.
-  if (looksNutrition(prompt)) {
+  if (looksNutrition(prompt) || nutrition.getPendingAction()) {
     try {
       const res = await handleNutrition(prompt);
       if (res) {
@@ -204,80 +205,109 @@ function nutritionTodayLine() {
 
 const MACRO_KEYS = ["calories", "protein", "carbs", "fat", "fiber"];
 
-/** Parse + apply a nutrition message. Returns { intent, response, data, ai_meta }
-    if it WAS a nutrition message, or null so the caller can fall through to normal chat. */
-async function handleNutrition(prompt) {
+/* ---- confirmation-reply detection ---- */
+function isAffirmative(p) {
+  return /^\s*(y(es|eah|ep|up|a)|sure|correct|right|do it|go ahead|confirm|ok(ay)?|please|that'?s?\s+(right|it|correct)|all( of them)?|both|just one|only one|the (last|latest|recent|most recent) one|one)\b/i.test(p || "");
+}
+function isNegative(p) {
+  return /^\s*(no|nope|nah|cancel|never\s?mind|leave it|forget it|don'?t|do not)\b/i.test(p || "");
+}
+function removeModeFrom(p) {
+  const t = (p || "").toLowerCase();
+  if (/\ball\b|\bevery\b|\bboth\b/.test(t)) return "all";
+  if (/\b(one|just one|only one|latest|last|recent|most recent)\b/.test(t)) return "one";
+  return null;
+}
+
+/** Parse a nutrition message with the FULL model (more accurate than the fast one) —
+    returns a parsed intent, {empty:true} if not nutrition, or null on parse failure. */
+async function parseNutrition(prompt) {
   const allergens = profile.getAllergens();
   const sys =
     "You process a NUTRITION message for a food tracker and reply ONLY with JSON: " +
     "{\"foods\":[{\"name\":str,\"qty\":num,\"unit\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num,\"maybe_dairy\":bool}]," +
     "\"water_oz\":num,\"remove\":[str],\"alias\":{\"word\":str,\"means\":str}|null," +
-    "\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null}.\n" +
+    "\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null," +
+    "\"confident\":bool,\"question\":str}.\n" +
     "RULES:\n" +
     "- Put a food in `foods` ONLY if the user is reporting they ACTUALLY ATE or DRANK it (\"I ate\", \"I had\", " +
-    "\"for lunch I had\", \"just finished\"). If they are ASKING about a food, asking its calories, whether it's " +
-    "dairy-free, considering it, or it's hypothetical/future — DO NOT log it; return foods:[].\n" +
-    "- Macros are PER ONE unit; qty = how many. ALWAYS give realistic protein/carbs/fat/fiber — NEVER 0 protein " +
-    "for meat/eggs/fish/beans (e.g. 3 oz ham ≈ 90 kcal, 15g protein, 1g carb, 3g fat; 2 large eggs ≈ 140 kcal, 12g protein).\n" +
+    "\"for lunch I had\", \"just finished\"). If they are ASKING about a food, its calories, whether it's dairy-free, " +
+    "considering it, or it's hypothetical/future — DO NOT log it; foods:[].\n" +
+    "- Macros are PER ONE unit; qty = how many. ALWAYS give realistic protein/carbs/fat/fiber — NEVER 0 protein for " +
+    "meat/eggs/fish/beans (e.g. 3 oz ham ≈ 90 kcal, 15g protein, 1g carb, 3g fat; 2 large eggs ≈ 140 kcal, 12g protein).\n" +
     "- water_oz = fluids in fl oz ('a bottle'≈20, 'a glass'≈8, '1 L'≈34).\n" +
-    "- remove = foods to REMOVE from today's log ('remove the ham', 'I didn't actually eat that', 'undo the belvita').\n" +
+    "- remove = foods to REMOVE from today's log ('remove the ham', 'undo the belvita').\n" +
     "- alias = a CODE WORD ('when I say X I mean Y', 'call it X'): word=short code, means=full food name.\n" +
     "- correction = the REAL macros of a food ('belvita is 230 cal'): per-unit; food=its name or 'it'.\n" +
+    "- confident: set FALSE and put a short clarifying question in `question` if the message is AMBIGUOUS — " +
+    "unclear whether they ate it or are just asking, a vague/unclear food, an odd quantity, or you're unsure which item " +
+    "they mean. When you're sure, confident:true and question:\"\". Prefer asking over guessing.\n" +
     "- Use [] / 0 / null for anything absent. maybe_dairy=true if it usually has milk/cheese/butter/cream/whey/casein " +
     "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").\n" +
-    "Examples: 'I had 2 eggs and a bagel' -> foods has eggs+bagel. " +
-    "'how many calories in a chocolate belvita?' -> foods:[] (it's a question). " +
-    "'remove the ham' -> remove:['ham']. 'belvita is 230 cal' -> correction:{food:'belvita',calories:230}.";
-  const model = settingsMod.getSettings().groqFastModel;
+    "Examples: 'I had 2 eggs and a bagel' -> foods eggs+bagel, confident:true. " +
+    "'how many calories in a chocolate belvita?' -> foods:[], confident:true. " +
+    "'that thing I made earlier' -> confident:false, question:'Which meal, sir, and what was in it?'";
+  // No fast-model override -> uses the primary full model (Groq 70B) with Gemini fallback.
   const r = await runTask("nutrition_parse",
-    [{ role: "system", content: sys }, { role: "user", content: prompt }], { model, jsonMode: true });
+    [{ role: "system", content: sys }, { role: "user", content: prompt }], { jsonMode: true });
 
   let p; try { p = JSON.parse(stripFences(r.text)); } catch (e) { return null; }
+  const ai_meta = { provider: r.provider, model: r.model };
   let foods = Array.isArray(p.foods) ? p.foods : [];
   const water = Math.max(0, Number(p.water_oz) || 0);
   const remove = Array.isArray(p.remove) ? p.remove.filter(Boolean) : [];
   const alias = (p.alias && p.alias.word && p.alias.means) ? p.alias : null;
   const correction = (p.correction && p.correction.food) ? p.correction : null;
 
-  // GUARD: never log foods from a question/mention — only when the user actually
-  // reported eating/drinking. (Fixes "asked about a belvita and it added it".)
+  // GUARD: never log foods from a question/mention.
   if (foods.length && (!hasConsumptionSignal(prompt) || isQuestionish(prompt))) foods = [];
 
-  if (!foods.length && !water && !remove.length && !alias && !correction) return null;  // not a log — fall through
+  if (!foods.length && !water && !remove.length && !alias && !correction) return { empty: true, ai_meta };
+  return { foods, water, remove, alias, correction,
+    confident: p.confident !== false, question: typeof p.question === "string" ? p.question.trim() : "", ai_meta };
+}
 
+/** Apply a parsed nutrition intent. removeMode "all" | "one" governs removals. */
+function applyNutrition(parsed, { removeMode = "one" } = {}) {
   const parts = [], data = {};
 
-  // 0) removals ("remove the ham")
-  if (remove.length) {
-    const gone = [];
-    for (const name of remove) { if (nutrition.removeFoodByName(name)) gone.push(name); }
+  // removals
+  if (parsed.remove && parsed.remove.length) {
+    const gone = [], notFound = [];
+    for (const name of parsed.remove) {
+      const matches = nutrition.findLoggedByName(name);
+      if (!matches.length) { notFound.push(name); continue; }
+      const n = removeMode === "all" ? nutrition.removeFoodByName(name) : nutrition.removeOneFoodByName(name);
+      if (n) gone.push(name + (removeMode === "all" && n > 1 ? ` (all ${n})` : ""));
+    }
     if (gone.length) { parts.push(`Removed ${gone.join(", ")} from today's log.`); data.removed = gone; }
-    else parts.push(`Didn't find ${remove.join(", ")} in today's log to remove.`);
+    if (notFound.length) parts.push(`Didn't find ${notFound.join(", ")} to remove.`);
   }
 
-  // 1) code word / alias
-  if (alias) {
-    if (nutrition.findFood(alias.means)) nutrition.addAlias(alias.means, alias.word);
-    else nutrition.setFood({ name: alias.means, aliases: [alias.word], source: "user" });
-    parts.push(`Got it — when you say "${alias.word}" I'll take that as ${alias.means}.`);
-    data.alias = { word: alias.word, means: alias.means };
+  // code word / alias
+  if (parsed.alias) {
+    const a = parsed.alias;
+    if (nutrition.findFood(a.means)) nutrition.addAlias(a.means, a.word);
+    else nutrition.setFood({ name: a.means, aliases: [a.word], source: "user" });
+    parts.push(`Got it — when you say "${a.word}" I'll take that as ${a.means}.`);
+    data.alias = { word: a.word, means: a.means };
   }
 
-  // 2) correction ("belvita is 230 cal") — resolve "it/that" to the last unknown asked about
-  if (correction) {
-    let name = String(correction.food).trim();
+  // correction
+  if (parsed.correction) {
+    let name = String(parsed.correction.food).trim();
     if (/^(it|that|this|the last one)$/i.test(name)) name = (nutrition.getPending()?.names || [])[0] || name;
     const per = {};
-    for (const k of MACRO_KEYS) if (correction[k] != null) per[k] = +correction[k];
+    for (const k of MACRO_KEYS) if (parsed.correction[k] != null) per[k] = +parsed.correction[k];
     const res = nutrition.correctLoggedFood(name, per);
     parts.push(`Updated ${res.food.name}${per.calories != null ? ` to ~${per.calories} kcal` : ""}` +
       `${res.entriesUpdated ? ` (fixed ${res.entriesUpdated} in today's log)` : ""} — I'll remember that.`);
     data.correction = res.food.name;
   }
 
-  // 3) log foods (reuse remembered/aliased macros; estimate + flag unknowns)
+  // log foods
   const logged = [], dairy = [], unknown = [];
-  for (const f of foods) {
+  for (const f of (parsed.foods || [])) {
     if (!f || !f.name) continue;
     const qty = Number(f.qty) || 1;
     const known = nutrition.findFood(f.name);
@@ -291,6 +321,7 @@ async function handleNutrition(prompt) {
     if (f.maybe_dairy) dairy.push(name);
     if (!known) unknown.push(name);
   }
+  const water = parsed.water || 0;
   if (water > 0) nutrition.logWater(water);
 
   if (logged.length) {
@@ -298,7 +329,7 @@ async function handleNutrition(prompt) {
       `${l.qty > 1 ? l.qty + "× " : ""}${l.name} (~${l.calories} kcal${l.fromMemory ? ", remembered" : ""})`).join(", ") + ".");
   }
   if (water > 0) parts.push(`+${water} oz water.`);
-  if (logged.length || water > 0 || remove.length) {
+  if (logged.length || water > 0 || (data.removed && data.removed.length)) {
     const t = nutrition.dayTotals(), g = profile.dailyGoal();
     const pLeft = Math.max(0, g.protein - t.protein);
     parts.push(`Day: ${t.calories}/${g.kcal} kcal · protein ${t.protein}/${g.protein}g` +
@@ -312,9 +343,52 @@ async function handleNutrition(prompt) {
   }
 
   const intent = (logged.length || water) ? "nutrition_log"
-    : remove.length ? "nutrition_remove"
-    : correction ? "nutrition_correct" : "nutrition_alias";
-  return { intent, response: parts.join(" "), data, ai_meta: { provider: r.provider, model: r.model } };
+    : (data.removed && data.removed.length) ? "nutrition_remove"
+    : parsed.correction ? "nutrition_correct" : "nutrition_alias";
+  return { intent, response: parts.join(" ") || "Done, sir.", data, ai_meta: parsed.ai_meta };
+}
+
+/** Top-level: resolve any pending confirmation, else parse and (ASK if unsure/ambiguous) apply. */
+async function handleNutrition(prompt) {
+  // 1) resolve a pending confirmation first (expires after 5 min so it's never stale)
+  let pending = nutrition.getPendingAction();
+  if (pending && pending.ts && Date.now() - pending.ts > 300000) { nutrition.clearPendingAction(); pending = null; }
+  if (pending) {
+    const mode = removeModeFrom(prompt);
+    if (isNegative(prompt)) { nutrition.clearPendingAction(); return { intent: "nutrition_cancel", response: "Okay, sir — left it as it was.", data: {}, ai_meta: { provider: null, model: null } }; }
+    if (isAffirmative(prompt) || mode) {
+      nutrition.clearPendingAction();
+      return applyNutrition(pending.parsed, { removeMode: mode || pending.defaultRemoveMode || "one" });
+    }
+    nutrition.clearPendingAction();   // unrelated reply -> drop the question, parse the new message
+  }
+
+  // 2) parse
+  const parsed = await parseNutrition(prompt);
+  if (!parsed || parsed.empty) return null;
+
+  // 3) removal ambiguity: >1 matching entry and no explicit "all"/"one" -> ASK first
+  const explicitMode = removeModeFrom(prompt);
+  if (!explicitMode) {
+    for (const name of parsed.remove) {
+      const matches = nutrition.findLoggedByName(name);
+      if (matches.length > 1) {
+        nutrition.setPendingAction({ parsed, defaultRemoveMode: "one", ts: Date.now() });
+        return { intent: "nutrition_confirm",
+          response: `You've got ${matches.length} ${name} logged today, sir — remove all ${matches.length}, or just the most recent one? (say "all" or "just one")`,
+          data: {}, ai_meta: parsed.ai_meta };
+      }
+    }
+  }
+
+  // 4) low confidence -> ASK before doing anything (so it's not jumpy)
+  if (!parsed.confident && parsed.question) {
+    nutrition.setPendingAction({ parsed, defaultRemoveMode: "one", ts: Date.now() });
+    return { intent: "nutrition_confirm", response: parsed.question, data: {}, ai_meta: parsed.ai_meta };
+  }
+
+  // 5) confident -> apply
+  return applyNutrition(parsed, { removeMode: explicitMode || "one" });
 }
 
 function stripFences(s) {

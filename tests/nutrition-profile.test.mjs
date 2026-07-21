@@ -118,5 +118,19 @@ console.log("\n[9] Remove a logged food (undo)");
   ok("ham no longer in today's log", !nutrition.getDay().foods.some(f => f.name.toLowerCase() === "ham"));
 }
 
+console.log("\n[10] Safe removal (one vs all) + pending confirmation store");
+{
+  nutrition.removeFoodByName("belvita");   // clear any belvita left from earlier sections
+  nutrition.logFood({ name: "Chocolate Belvita sandwich", qty: 1, calories: 230, protein: 4, carbs: 40, fat: 7, fiber: 3 });
+  nutrition.logFood({ name: "Chocolate Belvita sandwich", qty: 1, calories: 230, protein: 4, carbs: 40, fat: 7, fiber: 3 });
+  ok("findLoggedByName finds both via the code word", nutrition.findLoggedByName("belvita").length === 2);
+  ok("removeOneFoodByName removes exactly ONE", nutrition.removeOneFoodByName("belvita") === 1 && nutrition.findLoggedByName("belvita").length === 1);
+  ok("removeFoodByName clears the rest", nutrition.removeFoodByName("belvita") === 1 && nutrition.findLoggedByName("belvita").length === 0);
+  nutrition.setPendingAction({ parsed: { remove: ["belvita"] }, ts: Date.now() });
+  ok("pending confirmation persists", !!nutrition.getPendingAction());
+  nutrition.clearPendingAction();
+  ok("pending confirmation clears", nutrition.getPendingAction() === null);
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

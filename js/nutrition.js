@@ -15,7 +15,7 @@
      apex.nutrition.log.<date>   -> that day's log { foods[], water_oz, creatine, ... }
    ============================================================================ */
 
-import { getItem, setItem, ensureSeeded } from "./storage.js";
+import { getItem, setItem, ensureSeeded, removeItem } from "./storage.js";
 
 const FOODS_KEY = "nutrition.foods";
 const RECIPES_KEY = "nutrition.recipes";
@@ -272,17 +272,44 @@ export function removeFoodEntry(id, d = todayStr()) {
   return day.foods.length < before;
 }
 
-/** Remove today's log entries matching a food name or its code word ("remove the ham"). */
+function matchNames(nameOrAlias) {
+  const f = findFood(nameOrAlias);
+  return [nameOrAlias, ...(f ? [f.name, ...(f.aliases || [])] : [])].map(norm);
+}
+
+/** Today's log entries matching a food name or its code word (used to decide if a
+    removal is ambiguous — more than one entry — so the coach can ask first). */
+export function findLoggedByName(nameOrAlias, d = todayStr()) {
+  const names = matchNames(nameOrAlias);
+  return getDay(d).foods.filter((e) => names.includes(norm(e.name)));
+}
+
+/** Remove ALL today's entries matching a food name/code word ("remove all the ham"). */
 export function removeFoodByName(nameOrAlias, d = todayStr()) {
   const day = getDay(d);
   const before = day.foods.length;
-  const f = findFood(nameOrAlias);
-  const names = [nameOrAlias, ...(f ? [f.name, ...(f.aliases || [])] : [])].map(norm);
+  const names = matchNames(nameOrAlias);
   day.foods = day.foods.filter((e) => !names.includes(norm(e.name)));
   const removed = before - day.foods.length;
   if (removed) saveDay(day);
   return removed;
 }
+
+/** Remove only the MOST RECENT matching entry (the safe default for "remove the X"). */
+export function removeOneFoodByName(nameOrAlias, d = todayStr()) {
+  const day = getDay(d);
+  const names = matchNames(nameOrAlias);
+  for (let i = day.foods.length - 1; i >= 0; i--) {
+    if (names.includes(norm(day.foods[i].name))) { day.foods.splice(i, 1); saveDay(day); return 1; }
+  }
+  return 0;
+}
+
+/* Pending CONFIRMATION: a parsed nutrition action we asked the user to confirm before
+   applying (keeps it from being "jumpy"). Resolved by their next yes/no/"all"/"one". */
+export function setPendingAction(a) { setItem("nutrition.pendingAction", a); }
+export function getPendingAction() { return getItem("nutrition.pendingAction", null); }
+export function clearPendingAction() { removeItem("nutrition.pendingAction"); }
 
 /** Totals for a day: summed macros + water. */
 export function dayTotals(d = todayStr()) {
