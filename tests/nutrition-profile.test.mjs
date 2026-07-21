@@ -107,5 +107,16 @@ console.log("\n[8] Food code words (aliases) + corrections");
   ok("setFood does not duplicate the aliased food", nutrition.foods().filter(f => f.name === "Chocolate Belvita sandwich").length === 1);
 }
 
+console.log("\n[9] Remove a logged food (undo)");
+{
+  nutrition.logFood({ name: "Ham", qty: 1, calories: 90, protein: 15, carbs: 1, fat: 3, fiber: 0 });
+  const beforeCal = nutrition.dayTotals().calories;
+  ok("ham is in today's log", nutrition.getDay().foods.some(f => f.name.toLowerCase() === "ham"));
+  const removed = nutrition.removeFoodByName("ham");
+  ok("removeFoodByName removes matching entries", removed >= 1);
+  ok("day calories dropped after removal", nutrition.dayTotals().calories < beforeCal);
+  ok("ham no longer in today's log", !nutrition.getDay().foods.some(f => f.name.toLowerCase() === "ham"));
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

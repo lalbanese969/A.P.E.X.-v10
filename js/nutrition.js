@@ -263,13 +263,25 @@ export function logWater(oz, d = todayStr()) {
 export function setWater(oz, d = todayStr()) { const day = getDay(d); day.water_oz = Math.max(0, oz); saveDay(day); return day.water_oz; }
 export function setCreatine(taken, d = todayStr()) { const day = getDay(d); day.creatine = !!taken; saveDay(day); return day.creatine; }
 
-/** Remove a logged food entry (undo). */
+/** Remove a logged food entry by id (undo). */
 export function removeFoodEntry(id, d = todayStr()) {
   const day = getDay(d);
   const before = day.foods.length;
   day.foods = day.foods.filter((f) => f.id !== id);
   saveDay(day);
   return day.foods.length < before;
+}
+
+/** Remove today's log entries matching a food name or its code word ("remove the ham"). */
+export function removeFoodByName(nameOrAlias, d = todayStr()) {
+  const day = getDay(d);
+  const before = day.foods.length;
+  const f = findFood(nameOrAlias);
+  const names = [nameOrAlias, ...(f ? [f.name, ...(f.aliases || [])] : [])].map(norm);
+  day.foods = day.foods.filter((e) => !names.includes(norm(e.name)));
+  const removed = before - day.foods.length;
+  if (removed) saveDay(day);
+  return removed;
 }
 
 /** Totals for a day: summed macros + water. */

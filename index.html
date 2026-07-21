@@ -2517,8 +2517,8 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     try {
       const data = await pipelineMod.handleCoachPrompt(text);
       thinking.textContent = data.apex_response;
-      // If APEX just logged food/water, jump to Nutrition so the bars visibly move.
-      if (data.intent === "nutrition_log") activeTab = 0;
+      // If APEX just changed the food/water numbers, jump to Nutrition so the bars move.
+      if (typeof data.intent === "string" && data.intent.startsWith("nutrition")) activeTab = 0;
       render();
       console.log("[A.P.E.X./coach]", { intent: data.intent, ai: data.ai_meta });
     } catch (err) {

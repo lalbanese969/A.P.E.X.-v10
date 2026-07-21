@@ -168,14 +168,31 @@ function coachSystem() {
    230 cal"). Shared by BOTH the main chat and the /big trainer chat.
    ============================================================================ */
 
-// Cheap gate: is this plausibly about food/drink/aliases/corrections?
+// Cheap gate: is this plausibly about food/drink/aliases/corrections/removals?
 function looksNutrition(p) {
   const t = (p || "").toLowerCase();
   return /\b(i (ate|had|eat|drank|consumed|made)|just (ate|had|drank|made)|for (breakfast|lunch|dinner)|as a snack|had a|ate a|log (this|that|it|my)|drank|drinking)\b/.test(t)
     || /\bwhen i say\b|\bcode ?word\b|\b(means|refers to)\b/.test(t)
     || /\b(is|was|has|=)\s*\d+\s*(cal|calorie|calories|kcal|g|grams?|oz)\b/.test(t)
+    || /\b(remove|delete|undo|scratch|take (off|out))\b|\bdidn'?t (actually |really )?(eat|have|drink)\b/.test(t)
     || (/\b\d+(\.\d+)?\s*(oz|ounce|ounces|ml|l|liter|litre|cup|cups|glass|glasses|bottle|bottles)\b/.test(t)
         && /\b(water|drank|drink|drinking|hydrat|fluids?)\b/.test(t));
+}
+
+// Did the user actually SAY they ate/drank something (vs just asking about a food)?
+// This is a deterministic guard so a question ("how many calories in a belvita?")
+// never gets logged even if the model tries to.
+function hasConsumptionSignal(p) {
+  const t = (p || "").toLowerCase();
+  return /\b(ate|eaten|eating|had|have (a|some|the|my)|having|drank|drinking|finished|consumed|snacked|grabbed|made myself|log(ged)?|add(ed|ing)?|track)\b/.test(t)
+    || /\bfor (breakfast|lunch|dinner)\b|\bas a snack\b/.test(t);
+}
+// Is the message a question / hypothetical (asking about a food, not logging it)?
+function isQuestionish(p) {
+  const t = (p || "").trim().toLowerCase();
+  return t.endsWith("?")
+    || /^(how|what|what'?s|is|are|does|do|can|should|would|which|why|how many|how much|whats)\b/.test(t)
+    || /\b(going to|gonna|planning to|thinking of|should i|can i have)\b/.test(t);
 }
 
 // Compact "today so far vs goal" line for coaching context.
@@ -194,25 +211,49 @@ async function handleNutrition(prompt) {
   const sys =
     "You process a NUTRITION message for a food tracker and reply ONLY with JSON: " +
     "{\"foods\":[{\"name\":str,\"qty\":num,\"unit\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num,\"maybe_dairy\":bool}]," +
-    "\"water_oz\":num,\"alias\":{\"word\":str,\"means\":str}|null,\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null}. " +
-    "foods = things being EATEN/DRUNK now (macros PER ONE unit; qty = how many). " +
-    "water_oz = fluids in fl oz ('a bottle'≈20, 'a glass'≈8, '1 L'≈34). " +
-    "alias = when the user defines a CODE WORD ('when I say X I mean Y', 'X means Y', 'call it X'): word=short code, means=full food name. " +
-    "correction = when the user gives the REAL macros of a food ('belvita is 230 cal', 'that bagel was 350'): per-unit; food=its name or 'it'. " +
-    "Use null / [] / 0 for anything absent. maybe_dairy=true if it commonly has milk/cheese/butter/cream/whey/casein " +
-    "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").";
+    "\"water_oz\":num,\"remove\":[str],\"alias\":{\"word\":str,\"means\":str}|null," +
+    "\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null}.\n" +
+    "RULES:\n" +
+    "- Put a food in `foods` ONLY if the user is reporting they ACTUALLY ATE or DRANK it (\"I ate\", \"I had\", " +
+    "\"for lunch I had\", \"just finished\"). If they are ASKING about a food, asking its calories, whether it's " +
+    "dairy-free, considering it, or it's hypothetical/future — DO NOT log it; return foods:[].\n" +
+    "- Macros are PER ONE unit; qty = how many. ALWAYS give realistic protein/carbs/fat/fiber — NEVER 0 protein " +
+    "for meat/eggs/fish/beans (e.g. 3 oz ham ≈ 90 kcal, 15g protein, 1g carb, 3g fat; 2 large eggs ≈ 140 kcal, 12g protein).\n" +
+    "- water_oz = fluids in fl oz ('a bottle'≈20, 'a glass'≈8, '1 L'≈34).\n" +
+    "- remove = foods to REMOVE from today's log ('remove the ham', 'I didn't actually eat that', 'undo the belvita').\n" +
+    "- alias = a CODE WORD ('when I say X I mean Y', 'call it X'): word=short code, means=full food name.\n" +
+    "- correction = the REAL macros of a food ('belvita is 230 cal'): per-unit; food=its name or 'it'.\n" +
+    "- Use [] / 0 / null for anything absent. maybe_dairy=true if it usually has milk/cheese/butter/cream/whey/casein " +
+    "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").\n" +
+    "Examples: 'I had 2 eggs and a bagel' -> foods has eggs+bagel. " +
+    "'how many calories in a chocolate belvita?' -> foods:[] (it's a question). " +
+    "'remove the ham' -> remove:['ham']. 'belvita is 230 cal' -> correction:{food:'belvita',calories:230}.";
   const model = settingsMod.getSettings().groqFastModel;
   const r = await runTask("nutrition_parse",
     [{ role: "system", content: sys }, { role: "user", content: prompt }], { model, jsonMode: true });
 
   let p; try { p = JSON.parse(stripFences(r.text)); } catch (e) { return null; }
-  const foods = Array.isArray(p.foods) ? p.foods : [];
+  let foods = Array.isArray(p.foods) ? p.foods : [];
   const water = Math.max(0, Number(p.water_oz) || 0);
+  const remove = Array.isArray(p.remove) ? p.remove.filter(Boolean) : [];
   const alias = (p.alias && p.alias.word && p.alias.means) ? p.alias : null;
   const correction = (p.correction && p.correction.food) ? p.correction : null;
-  if (!foods.length && !water && !alias && !correction) return null;  // not actually nutrition
+
+  // GUARD: never log foods from a question/mention — only when the user actually
+  // reported eating/drinking. (Fixes "asked about a belvita and it added it".)
+  if (foods.length && (!hasConsumptionSignal(prompt) || isQuestionish(prompt))) foods = [];
+
+  if (!foods.length && !water && !remove.length && !alias && !correction) return null;  // not a log — fall through
 
   const parts = [], data = {};
+
+  // 0) removals ("remove the ham")
+  if (remove.length) {
+    const gone = [];
+    for (const name of remove) { if (nutrition.removeFoodByName(name)) gone.push(name); }
+    if (gone.length) { parts.push(`Removed ${gone.join(", ")} from today's log.`); data.removed = gone; }
+    else parts.push(`Didn't find ${remove.join(", ")} in today's log to remove.`);
+  }
 
   // 1) code word / alias
   if (alias) {
@@ -257,7 +298,7 @@ async function handleNutrition(prompt) {
       `${l.qty > 1 ? l.qty + "× " : ""}${l.name} (~${l.calories} kcal${l.fromMemory ? ", remembered" : ""})`).join(", ") + ".");
   }
   if (water > 0) parts.push(`+${water} oz water.`);
-  if (logged.length || water > 0) {
+  if (logged.length || water > 0 || remove.length) {
     const t = nutrition.dayTotals(), g = profile.dailyGoal();
     const pLeft = Math.max(0, g.protein - t.protein);
     parts.push(`Day: ${t.calories}/${g.kcal} kcal · protein ${t.protein}/${g.protein}g` +
@@ -270,7 +311,9 @@ async function handleNutrition(prompt) {
       `(e.g. "${unknown[0]} is 230 cal, 4g protein") or give me a code word and I'll lock it in.`);
   }
 
-  const intent = (logged.length || water) ? "nutrition_log" : (correction ? "nutrition_correct" : "nutrition_alias");
+  const intent = (logged.length || water) ? "nutrition_log"
+    : remove.length ? "nutrition_remove"
+    : correction ? "nutrition_correct" : "nutrition_alias";
   return { intent, response: parts.join(" "), data, ai_meta: { provider: r.provider, model: r.model } };
 }
 
