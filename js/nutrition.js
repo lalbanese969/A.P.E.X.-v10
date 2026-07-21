@@ -117,11 +117,12 @@ export function findFood(name) {
       || null;
 }
 
-/** Remember a food's macros so future logs are consistent. Dedupes by name
-    (updates the existing record + usage stats instead of duplicating). */
+/** Remember a food's macros so future logs are consistent. Dedupes by name OR
+    alias/code word (bumps the existing record instead of duplicating). */
 export function rememberFood(food) {
   const list = foods();
-  const existing = list.find((f) => norm(f.name) === norm(food.name));
+  const idx = findIndexFor(list, food.name, food.aliases || []);
+  const existing = idx >= 0 ? list[idx] : null;
   if (existing) {
     // keep known good macros; fill any gaps; bump usage
     for (const k of MACROS) if (existing[k] == null && food[k] != null) existing[k] = food[k];
@@ -143,6 +144,82 @@ export function rememberFood(food) {
   setItem(FOODS_KEY, list);
   return rec;
 }
+
+/* Find the index of a remembered food matching any of these names/aliases. */
+function findIndexFor(list, name, aliases = []) {
+  const names = [name, ...(aliases || [])].map(norm).filter(Boolean);
+  if (!names.length) return -1;
+  return list.findIndex((f) => names.includes(norm(f.name)) || (f.aliases || []).some((a) => names.includes(norm(a))));
+}
+
+/** Upsert a food with EXPLICIT macros/aliases (used to teach or correct a food).
+    Unlike rememberFood (which only fills gaps), this overrides the provided fields. */
+export function setFood(food) {
+  const list = foods();
+  const i = findIndexFor(list, food.name, food.aliases || []);
+  if (i >= 0) {
+    const ex = list[i];
+    for (const k of MACROS) if (food[k] != null) ex[k] = food[k];
+    if (food.aliases) ex.aliases = [...new Set([...(ex.aliases || []), ...food.aliases])];
+    if (food.per) ex.per = food.per;
+    if (food.dairy != null) ex.dairy = !!food.dairy;
+    if (food.source) ex.source = food.source;
+    if (food.confidence != null) ex.confidence = food.confidence;
+    ex.lastUsed = nowIso();
+    setItem(FOODS_KEY, list);
+    return ex;
+  }
+  const rec = {
+    id: uid("food_"), name: food.name, aliases: food.aliases || [], per: food.per || null,
+    calories: food.calories ?? 0, protein: food.protein ?? 0, carbs: food.carbs ?? 0,
+    fat: food.fat ?? 0, fiber: food.fiber ?? 0, sodium: food.sodium ?? 0,
+    dairy: !!food.dairy, source: food.source || "user", confidence: food.confidence ?? null,
+    timesLogged: 0, created: nowIso(), lastUsed: nowIso(),
+  };
+  list.push(rec);
+  setItem(FOODS_KEY, list);
+  return rec;
+}
+
+/** Teach a code word: `alias` now also refers to the food named `foodName`. */
+export function addAlias(foodName, alias) {
+  const list = foods();
+  const i = findIndexFor(list, foodName);
+  if (i < 0) return null;
+  const a = String(alias || "").trim();
+  if (a && !(list[i].aliases || []).some((x) => norm(x) === norm(a))) {
+    list[i].aliases = [...(list[i].aliases || []), a];
+    list[i].lastUsed = nowIso();
+    setItem(FOODS_KEY, list);
+  }
+  return list[i];
+}
+
+/** Correct a food's macros (user-confirmed): update the remembered food AND fix any
+    of today's log entries that used it. `per` holds only the macros to change (per unit). */
+export function correctLoggedFood(nameOrAlias, per, d = todayStr()) {
+  const list0 = foods();
+  const idx = findIndexFor(list0, nameOrAlias);
+  const canonical = idx >= 0 ? list0[idx].name : nameOrAlias;
+  const food = setFood({ name: canonical, ...per, source: "user_confirmed", confidence: 1 });
+  const names = [food.name, ...(food.aliases || []), nameOrAlias].map(norm);
+  const day = getDay(d);
+  let changed = 0;
+  for (const e of day.foods) {
+    if (names.includes(norm(e.name))) {
+      const qty = e.qty || 1;
+      for (const k of MACROS) if (per[k] != null) e[k] = Math.round(per[k] * qty);
+      e.source = "user_confirmed";
+      changed++;
+    }
+  }
+  if (changed) saveDay(day);
+  return { food, entriesUpdated: changed };
+}
+
+/* Pending "unknown food" the coach asked to confirm (so a follow-up correction can resolve "it"). */
+export function setPending(p) { setItem("nutrition.pending", p); }
+export function getPending() { return getItem("nutrition.pending", null); }
 
 /* ---- daily log ------------------------------------------------------------ */
 function freshDay(d) {

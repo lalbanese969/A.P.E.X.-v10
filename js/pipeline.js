@@ -65,9 +65,26 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
       result.apex_response = "Tweaked it, sir — and I'll remember that for next time. Anything else?";
       aiMeta = ai;
     } else {
-      const r = await answer(prompt, packet, {});
-      result.apex_response = r.text;
-      aiMeta = r;
+      // plain chat — but first, food memory works here too (only when it's clearly
+      // nutrition, so calendar/email intents above always take precedence).
+      let handledNutrition = false;
+      if (looksNutrition(prompt)) {
+        try {
+          const nres = await handleNutrition(prompt);
+          if (nres) {
+            result.intent = nres.intent;
+            result.apex_response = nres.response;
+            result.nutrition = nres.data;
+            aiMeta = nres.ai_meta;
+            handledNutrition = true;
+          }
+        } catch (e) { /* fall through to normal chat */ }
+      }
+      if (!handledNutrition) {
+        const r = await answer(prompt, packet, {});
+        result.apex_response = r.text;
+        aiMeta = r;
+      }
     }
   } catch (e) {
     if (e instanceof AIError) {
@@ -97,16 +114,15 @@ export async function handleCoachPrompt(userPrompt, health = "") {
   const packet = memory.buildPacket(prompt);
   const result = { user_prompt: prompt, intent: "coach", ai_meta: { provider: null, model: null } };
 
-  // NUTRITION-LOGGING PATH: "I ate 2 eggs and a bagel" / "drank another 32 oz" ->
-  // extract, reuse remembered foods for consistency, write to today's log, and
-  // confirm with the running totals. Falls through to normal coaching on failure.
-  if (looksLikeNutritionLog(prompt)) {
+  // NUTRITION PATH: log food/water, learn code words, or accept corrections.
+  // Falls through to normal coaching if it wasn't actually a nutrition message.
+  if (looksNutrition(prompt)) {
     try {
-      const res = await logNutritionFromText(prompt);
-      if (res && (res.logged.length || res.water_oz)) {
-        result.intent = "nutrition_log";
-        result.apex_response = res.message;
-        result.nutrition = res;
+      const res = await handleNutrition(prompt);
+      if (res) {
+        result.intent = res.intent;
+        result.apex_response = res.response;
+        result.nutrition = res.data;
         result.ai_meta = res.ai_meta;
         memory.learnFromInteraction(prompt, "").catch(() => {});
         return result;
@@ -143,12 +159,21 @@ function coachSystem() {
     `the main chat for those.` + allergyLine;
 }
 
-/* ---- nutrition logging from chat -------------------------------------------- */
+/* ============================================================================
+   NUTRITION FROM CHAT — logging, code words (aliases), and corrections.
+   One Groq JSON call classifies + extracts, then we apply it against the food
+   memory: reuse remembered foods (and their code words) for consistent macros,
+   estimate unknowns but ASK to confirm them, learn aliases ("when I say belvita
+   I mean the chocolate Belvita sandwich"), and accept corrections ("belvita is
+   230 cal"). Shared by BOTH the main chat and the /big trainer chat.
+   ============================================================================ */
 
-// Cheap gate: does this message look like the user logging food/drink?
-function looksLikeNutritionLog(p) {
+// Cheap gate: is this plausibly about food/drink/aliases/corrections?
+function looksNutrition(p) {
   const t = (p || "").toLowerCase();
-  return /\b(i (ate|had|eat|drank|consumed|made)|just (ate|had|drank|made)|log (this|that|it|my)|(for )?(breakfast|lunch|dinner)|as a snack|had a|ate a)\b/.test(t)
+  return /\b(i (ate|had|eat|drank|consumed|made)|just (ate|had|drank|made)|for (breakfast|lunch|dinner)|as a snack|had a|ate a|log (this|that|it|my)|drank|drinking)\b/.test(t)
+    || /\bwhen i say\b|\bcode ?word\b|\b(means|refers to)\b/.test(t)
+    || /\b(is|was|has|=)\s*\d+\s*(cal|calorie|calories|kcal|g|grams?|oz)\b/.test(t)
     || (/\b\d+(\.\d+)?\s*(oz|ounce|ounces|ml|l|liter|litre|cup|cups|glass|glasses|bottle|bottles)\b/.test(t)
         && /\b(water|drank|drink|drinking|hydrat|fluids?)\b/.test(t));
 }
@@ -160,57 +185,93 @@ function nutritionTodayLine() {
     `fat ${t.fat}/${g.fat}g, fiber ${t.fiber}/${g.fiber}g, water ${t.water_oz}/${g.water_oz} oz.`;
 }
 
-async function logNutritionFromText(prompt) {
+const MACRO_KEYS = ["calories", "protein", "carbs", "fat", "fiber"];
+
+/** Parse + apply a nutrition message. Returns { intent, response, data, ai_meta }
+    if it WAS a nutrition message, or null so the caller can fall through to normal chat. */
+async function handleNutrition(prompt) {
   const allergens = profile.getAllergens();
   const sys =
-    "Extract food/drink LOGGING from the user's message as JSON, for a nutrition tracker. Return ONLY: " +
-    "{\"foods\":[{\"name\":string,\"qty\":number,\"unit\":string,\"calories\":number,\"protein\":number," +
-    "\"carbs\":number,\"fat\":number,\"fiber\":number,\"maybe_dairy\":boolean}],\"water_oz\":number}. " +
-    "MACROS ARE PER ONE UNIT (one item/serving); qty is how many. Estimate realistic US values. " +
-    "Water in fl oz: 'a bottle'≈20, 'a glass'≈8, '1 L'≈34. maybe_dairy=true if it commonly contains " +
-    "milk/cheese/butter/cream/whey/casein (user has a dairy allergy: " + allergens.slice(0, 8).join(", ") + "). " +
-    "If no food, foods=[]. If no drink, water_oz=0.";
+    "You process a NUTRITION message for a food tracker and reply ONLY with JSON: " +
+    "{\"foods\":[{\"name\":str,\"qty\":num,\"unit\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num,\"maybe_dairy\":bool}]," +
+    "\"water_oz\":num,\"alias\":{\"word\":str,\"means\":str}|null,\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null}. " +
+    "foods = things being EATEN/DRUNK now (macros PER ONE unit; qty = how many). " +
+    "water_oz = fluids in fl oz ('a bottle'≈20, 'a glass'≈8, '1 L'≈34). " +
+    "alias = when the user defines a CODE WORD ('when I say X I mean Y', 'X means Y', 'call it X'): word=short code, means=full food name. " +
+    "correction = when the user gives the REAL macros of a food ('belvita is 230 cal', 'that bagel was 350'): per-unit; food=its name or 'it'. " +
+    "Use null / [] / 0 for anything absent. maybe_dairy=true if it commonly has milk/cheese/butter/cream/whey/casein " +
+    "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").";
   const model = settingsMod.getSettings().groqFastModel;
-  const r = await runTask("nutrition_extract",
+  const r = await runTask("nutrition_parse",
     [{ role: "system", content: sys }, { role: "user", content: prompt }], { model, jsonMode: true });
-  const parsed = JSON.parse(stripFences(r.text));
-  const foods = Array.isArray(parsed.foods) ? parsed.foods : [];
-  const water = Math.max(0, Number(parsed.water_oz) || 0);
 
-  const logged = [], dairy = [];
+  let p; try { p = JSON.parse(stripFences(r.text)); } catch (e) { return null; }
+  const foods = Array.isArray(p.foods) ? p.foods : [];
+  const water = Math.max(0, Number(p.water_oz) || 0);
+  const alias = (p.alias && p.alias.word && p.alias.means) ? p.alias : null;
+  const correction = (p.correction && p.correction.food) ? p.correction : null;
+  if (!foods.length && !water && !alias && !correction) return null;  // not actually nutrition
+
+  const parts = [], data = {};
+
+  // 1) code word / alias
+  if (alias) {
+    if (nutrition.findFood(alias.means)) nutrition.addAlias(alias.means, alias.word);
+    else nutrition.setFood({ name: alias.means, aliases: [alias.word], source: "user" });
+    parts.push(`Got it — when you say "${alias.word}" I'll take that as ${alias.means}.`);
+    data.alias = { word: alias.word, means: alias.means };
+  }
+
+  // 2) correction ("belvita is 230 cal") — resolve "it/that" to the last unknown asked about
+  if (correction) {
+    let name = String(correction.food).trim();
+    if (/^(it|that|this|the last one)$/i.test(name)) name = (nutrition.getPending()?.names || [])[0] || name;
+    const per = {};
+    for (const k of MACRO_KEYS) if (correction[k] != null) per[k] = +correction[k];
+    const res = nutrition.correctLoggedFood(name, per);
+    parts.push(`Updated ${res.food.name}${per.calories != null ? ` to ~${per.calories} kcal` : ""}` +
+      `${res.entriesUpdated ? ` (fixed ${res.entriesUpdated} in today's log)` : ""} — I'll remember that.`);
+    data.correction = res.food.name;
+  }
+
+  // 3) log foods (reuse remembered/aliased macros; estimate + flag unknowns)
+  const logged = [], dairy = [], unknown = [];
   for (const f of foods) {
     if (!f || !f.name) continue;
     const qty = Number(f.qty) || 1;
-    // FOOD MEMORY: if we've logged this before, reuse its macros for consistency.
     const known = nutrition.findFood(f.name);
+    const name = known ? known.name : f.name;
     const per = known
       ? { calories: known.calories, protein: known.protein, carbs: known.carbs, fat: known.fat, fiber: known.fiber, sodium: known.sodium || 0 }
       : { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
-    nutrition.logFood({ name: f.name, qty, unit: f.unit || null, ...per,
-      source: known ? "memory" : "ai_estimate", confidence: known ? 0.9 : 0.5, dairy: !!f.maybe_dairy });
-    logged.push({ name: f.name, qty, unit: f.unit || null, calories: Math.round(per.calories * qty), fromMemory: !!known });
-    if (f.maybe_dairy) dairy.push(f.name);
+    nutrition.logFood({ name, qty, unit: f.unit || null, ...per,
+      source: known ? "memory" : "ai_estimate", confidence: known ? 0.9 : 0.4, dairy: !!f.maybe_dairy });
+    logged.push({ name, qty, calories: Math.round(per.calories * qty), fromMemory: !!known });
+    if (f.maybe_dairy) dairy.push(name);
+    if (!known) unknown.push(name);
   }
   if (water > 0) nutrition.logWater(water);
 
-  const totals = nutrition.dayTotals(), goal = profile.dailyGoal();
-  return { logged, water_oz: water, dairy, totals, goal,
-    message: buildLogMessage(logged, water, dairy, totals, goal),
-    ai_meta: { provider: r.provider, model: r.model } };
-}
-
-function buildLogMessage(logged, water, dairy, totals, goal) {
-  const bits = [];
   if (logged.length) {
-    bits.push("Logged, sir — " + logged.map((l) =>
+    parts.push("Logged, sir — " + logged.map((l) =>
       `${l.qty > 1 ? l.qty + "× " : ""}${l.name} (~${l.calories} kcal${l.fromMemory ? ", remembered" : ""})`).join(", ") + ".");
   }
-  if (water > 0) bits.push(`+${water} oz water.`);
-  const pLeft = Math.max(0, goal.protein - totals.protein);
-  bits.push(`Day: ${totals.calories}/${goal.kcal} kcal · protein ${totals.protein}/${goal.protein}g` +
-    `${pLeft > 0 ? ` (${pLeft}g to go)` : " ✓"} · water ${totals.water_oz}/${goal.water_oz} oz.`);
-  if (dairy.length) bits.push(`Heads up — ${dairy.join(", ")} may contain dairy; check the label (milk-protein allergy).`);
-  return bits.join(" ");
+  if (water > 0) parts.push(`+${water} oz water.`);
+  if (logged.length || water > 0) {
+    const t = nutrition.dayTotals(), g = profile.dailyGoal();
+    const pLeft = Math.max(0, g.protein - t.protein);
+    parts.push(`Day: ${t.calories}/${g.kcal} kcal · protein ${t.protein}/${g.protein}g` +
+      `${pLeft > 0 ? ` (${pLeft}g to go)` : " ✓"} · water ${t.water_oz}/${g.water_oz} oz.`);
+  }
+  if (dairy.length) parts.push(`Heads up — ${dairy.join(", ")} may contain dairy; check the label (milk-protein allergy).`);
+  if (unknown.length) {
+    nutrition.setPending({ names: unknown, date: nutrition.todayStr() });
+    parts.push(`I don't have ${unknown.join(", ")} saved yet, so that's an estimate — tell me the real numbers ` +
+      `(e.g. "${unknown[0]} is 230 cal, 4g protein") or give me a code word and I'll lock it in.`);
+  }
+
+  const intent = (logged.length || water) ? "nutrition_log" : (correction ? "nutrition_correct" : "nutrition_alias");
+  return { intent, response: parts.join(" "), data, ai_meta: { provider: r.provider, model: r.model } };
 }
 
 function stripFences(s) {

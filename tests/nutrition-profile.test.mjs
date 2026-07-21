@@ -90,5 +90,22 @@ console.log("\n[7] Export + delete");
   ok("deleteItem removes a record", profile.deleteItem(id) === true && !profile.allItems().some(x => x.id === id));
 }
 
+console.log("\n[8] Food code words (aliases) + corrections");
+{
+  // teach a food with a code word
+  nutrition.setFood({ name: "Chocolate Belvita sandwich", aliases: ["belvita"], calories: 230, protein: 4, carbs: 40, fat: 7, fiber: 3 });
+  const byAlias = nutrition.findFood("belvita");
+  ok("findFood('belvita') resolves the aliased food", byAlias && byAlias.name === "Chocolate Belvita sandwich");
+  eq("aliased food carries the taught calories", byAlias.calories, 230);
+  nutrition.addAlias("Chocolate Belvita sandwich", "choco belvita");
+  ok("addAlias adds a second code word", nutrition.findFood("choco belvita")?.name === "Chocolate Belvita sandwich");
+  // log by the code word, then correct it
+  nutrition.logFood({ name: "belvita", qty: 1, calories: 230, protein: 4, carbs: 40, fat: 7, fiber: 3, source: "memory" });
+  const res = nutrition.correctLoggedFood("belvita", { calories: 250, protein: 5 });
+  eq("correction updates remembered calories", nutrition.findFood("belvita").calories, 250);
+  ok("correction fixed today's log entry", res.entriesUpdated >= 1);
+  ok("setFood does not duplicate the aliased food", nutrition.foods().filter(f => f.name === "Chocolate Belvita sandwich").length === 1);
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
