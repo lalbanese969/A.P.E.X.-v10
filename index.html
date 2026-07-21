@@ -29,7 +29,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- viewport-fit=cover fills the notch/safe areas; locking zoom keeps it feeling like a native app,
+     not a scrollable web page (prevents pinch-zoom + double-tap zoom on iPad/iPhone). -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<!-- "Add to Home Screen" on iPad/iPhone then launches A.P.E.X. FULLSCREEN (standalone), with no
+     Safari toolbars and no page rubber-banding — it behaves like your own installed app. -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="A.P.E.X." />
+<meta name="theme-color" content="#0a0a0b" />
 <title>A.P.E.X. v10</title>
 
 <style>
@@ -72,9 +81,18 @@
 
 html, body {
   height: 100%;
+  overflow: hidden;
+  /* stop iPad/iPhone Safari from rubber-band scrolling / pull-to-refreshing the whole page */
+  overscroll-behavior: none;
 }
 
 body {
+  /* PIN the page to the viewport so the app itself never scrolls — only the inner
+     areas (messages, panels) do. This is what makes it feel stationary on iPad. */
+  position: fixed;
+  inset: 0;
+  /* respect the notch / home-indicator safe areas when launched fullscreen */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   background: var(--color-black);
   color: var(--color-text);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -82,6 +100,17 @@ body {
   overflow: hidden; /* the panels scroll internally, not the whole page */
   display: flex;
   flex-direction: column;
+}
+
+/* The only things allowed to scroll are the app's own scroll regions — and their
+   scrolling must NOT chain up to the page (overscroll-behavior: contain). */
+#messages,
+.center-view,
+.big-panels,
+.big-tabbody,
+#big-messages {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;   /* momentum scrolling on iOS */
 }
 
 /* ============================================================================
