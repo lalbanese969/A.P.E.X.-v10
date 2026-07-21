@@ -239,7 +239,8 @@ async function parseNutrition(prompt) {
     "unit:'oz', calories:42, protein:9, carbs:0, fat:1} (per OUNCE). '2 belvita packs' -> {name:'belvita chocolate " +
     "sandwich', qty:2, unit:'pack', calories:230, protein:3, carbs:27, fat:8} (per PACK, not 460).\n" +
     "- For MEAT & FISH ALWAYS use unit 'oz' with qty = number of ounces (convert items: 1 chicken breast≈6oz, " +
-    "1 pork chop≈4oz, 1 steak≈8oz, 3 slices bacon≈1.5oz). Keep meat in oz.\n" +
+    "1 pork chop≈4oz, 1 steak≈8oz, 3 slices bacon≈1.5oz). Keep meat in oz. ASSUME LEAN cuts with MINIMAL fat " +
+    "('turkey'/'steak'/'beef'/'ham' = lean) UNLESS the user names a fattier cut (ribeye, 80/20, etc.).\n" +
     "- Use the REFERENCE VALUES below (USDA-based, per their listed unit) whenever a food matches one (or an alias). " +
     "Assume COOKED weight for meats unless told raw. Round to whole numbers. ALWAYS give your best non-zero estimate — " +
     "NEVER 0 protein for meat/eggs/fish/beans, and never refuse to estimate.\n" +

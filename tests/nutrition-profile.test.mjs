@@ -150,16 +150,17 @@ console.log("\n[12] Food database lookup (per base unit) + no double-count");
 {
   const foodDb = await import("../js/foodDb.js");
   const turkey = foodDb.lookupFood("turkey");
-  eq("turkey -> turkey_breast per oz (42 kcal, 9p)", [turkey.unit, turkey.calories, turkey.protein], ["oz", 42, 9]);
+  eq("turkey -> lean per oz (38 kcal, 9p, 1 fat)", [turkey.unit, turkey.calories, turkey.protein, turkey.fat], ["oz", 38, 9, 1]);
   ok("'turkey breast' also resolves", foodDb.lookupFood("turkey breast")?.key === "turkey_breast");
+  ok("'steak' -> lean sirloin (fat 2)", foodDb.lookupFood("steak")?.key === "sirloin_steak" && foodDb.lookupFood("steak").fat === 2);
+  ok("'beef' -> lean 90/10 (fat 2)", foodDb.lookupFood("beef")?.key === "ground_beef_90_10" && foodDb.lookupFood("beef").fat === 2);
   const belvita = foodDb.lookupFood("belvita chocolate sandwich");
   eq("belvita per pack (230 kcal)", [belvita.unit, belvita.calories], ["pack", 230]);
   ok("'belvita' alias resolves", foodDb.lookupFood("belvita")?.key === "belvita_chocolate_sandwich");
   ok("'chicken' -> chicken_breast", foodDb.lookupFood("chicken")?.key === "chicken_breast");
-  ok("'steak' -> sirloin (alias default)", foodDb.lookupFood("steak")?.key === "sirloin_steak");
   ok("unknown food -> null", foodDb.lookupFood("dragon fruit smoothie") === null);
   // the fix: nutrition = per-unit × qty computed in code (was double-counted before)
-  ok("10 oz turkey = 420 kcal / 90 g protein (NOT 4200/900)", turkey.calories * 10 === 420 && turkey.protein * 10 === 90);
+  ok("10 oz turkey = 380 kcal / 90 g protein (NOT 4200/900)", turkey.calories * 10 === 380 && turkey.protein * 10 === 90);
   ok("2 belvita packs = 460 kcal / 6 g protein (NOT 920/12)", belvita.calories * 2 === 460 && belvita.protein * 2 === 6);
 }
 

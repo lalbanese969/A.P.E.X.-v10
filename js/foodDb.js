@@ -11,16 +11,18 @@
    ============================================================================ */
 
 export const FOOD_DB = {
+  // --- meats: LEAN cuts, cooked, per oz (minimal fat assumed unless a fattier cut
+  //     like ribeye or 80/20 is named). "turkey"/"steak"/"beef" default to these. ---
   chicken_breast:   { unit: "oz",   calories: 47,  protein: 9,   carbs: 0,  fat: 1   },
-  turkey_breast:    { unit: "oz",   calories: 42,  protein: 9,   carbs: 0,  fat: 1   },
-  ground_beef_90_10:{ unit: "oz",   calories: 56,  protein: 7,   carbs: 0,  fat: 3   },
+  turkey_breast:    { unit: "oz",   calories: 38,  protein: 9,   carbs: 0,  fat: 1   },
+  ground_beef_90_10:{ unit: "oz",   calories: 50,  protein: 8,   carbs: 0,  fat: 2   },
   ground_beef_80_20:{ unit: "oz",   calories: 72,  protein: 5,   carbs: 0,  fat: 6   },
-  sirloin_steak:    { unit: "oz",   calories: 58,  protein: 8,   carbs: 0,  fat: 3   },
+  sirloin_steak:    { unit: "oz",   calories: 49,  protein: 9,   carbs: 0,  fat: 2   },
   ribeye_steak:     { unit: "oz",   calories: 83,  protein: 7,   carbs: 0,  fat: 6   },
   pork_tenderloin:  { unit: "oz",   calories: 41,  protein: 8,   carbs: 0,  fat: 1   },
-  pork_chop:        { unit: "oz",   calories: 58,  protein: 7,   carbs: 0,  fat: 3   },
-  ham:              { unit: "oz",   calories: 46,  protein: 6,   carbs: 1,  fat: 2   },
-  salmon:           { unit: "oz",   calories: 59,  protein: 6,   carbs: 0,  fat: 4   },
+  pork_chop:        { unit: "oz",   calories: 52,  protein: 8,   carbs: 0,  fat: 2   },
+  ham:              { unit: "oz",   calories: 34,  protein: 6,   carbs: 1,  fat: 1   },
+  salmon:           { unit: "oz",   calories: 52,  protein: 8,   carbs: 0,  fat: 2   },
   tuna:             { unit: "oz",   calories: 33,  protein: 7,   carbs: 0,  fat: 0   },
   shrimp:           { unit: "oz",   calories: 28,  protein: 6,   carbs: 0,  fat: 0   },
   egg:              { unit: "each", calories: 70,  protein: 6,   carbs: 0,  fat: 5   },
@@ -57,8 +59,8 @@ export const FOOD_DB = {
 // short spoken names -> db key (the coach also knows these)
 export const FOOD_ALIASES = {
   chicken: "chicken_breast", turkey: "turkey_breast", steak: "sirloin_steak",
-  "ground beef": "ground_beef_90_10", hamburger: "ground_beef_90_10", pork: "pork_tenderloin",
-  rice: "white_rice_cooked", potato: "russet_potato", bread: "white_bread",
+  beef: "ground_beef_90_10", "ground beef": "ground_beef_90_10", hamburger: "ground_beef_90_10",
+  pork: "pork_tenderloin", rice: "white_rice_cooked", potato: "russet_potato", bread: "white_bread",
   eggs: "egg", "egg whites": "egg_white", pb: "peanut_butter", belvita: "belvita_chocolate_sandwich",
 };
 
