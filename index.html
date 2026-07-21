@@ -958,6 +958,13 @@ body {
       <div class="nav-item" data-view="logs">
         <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span><span>Logs</span>
       </div>
+      <!-- these two OPEN the fullscreen takeovers (same as /big and /open sim) instead of switching the center view -->
+      <div class="nav-item" data-action="big" id="nav-workout">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg></span><span>Workout</span>
+      </div>
+      <div class="nav-item" data-action="sim" id="nav-sim">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/></svg></span><span>Simulations</span>
+      </div>
       <div class="nav-item" data-view="settings" id="nav-settings">
         <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span><span>Settings</span>
       </div>
@@ -1527,7 +1534,12 @@ import { APEX_GREETINGS } from "./js/seedData.js";
   window.APEX.showView = showView;
 
   document.querySelectorAll(".nav-item").forEach((n) =>
-    n.addEventListener("click", () => showView(n.dataset.view)));
+    n.addEventListener("click", () => {
+      // Workout / Simulations launch the fullscreen takeovers, not a center view.
+      if (n.dataset.action === "big") return window.APEX.openBig();
+      if (n.dataset.action === "sim") return window.APEX.openSim();
+      showView(n.dataset.view);
+    }));
   document.getElementById("new-chat-btn").addEventListener("click", () => {
     if (window.APEX.resetChat) window.APEX.resetChat();
     showView("chat");
@@ -2090,7 +2102,13 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
 
   function build() {
     const dpr = window.devicePixelRatio || 1;
-    W = window.innerWidth; H = window.innerHeight;
+    // Size to the OVERLAY's real box — it's `position:fixed; inset:0`, i.e. TRUE
+    // fullscreen. (Using window.innerHeight here was the bug: on iPhone, Safari's
+    // toolbars make innerHeight shorter than the overlay, so the honeycomb only
+    // covered the top of the screen. The overlay box is always the whole screen.)
+    const rect = overlay.getBoundingClientRect();
+    W = Math.round(rect.width) || window.innerWidth;
+    H = Math.round(rect.height) || window.innerHeight;
     canvas.width = W * dpr; canvas.height = H * dpr;
     canvas.style.width = W + "px"; canvas.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -2205,6 +2223,12 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   closeBtn.addEventListener("click", close);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && overlay.classList.contains("on")) close();
+  });
+  // keep the canvas full-screen if the viewport changes while open (rotate, toolbar show/hide)
+  window.addEventListener("resize", () => {
+    if (!overlay.classList.contains("on")) return;
+    build();
+    if (raf) computeThresholds();   // mid-animation: rebuild growth for the new geometry
   });
 
   return { open, close };
