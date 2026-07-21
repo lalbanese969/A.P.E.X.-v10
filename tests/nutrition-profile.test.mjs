@@ -146,5 +146,23 @@ console.log("\n[11] Precise matching (no 'ham rolls' -> 'ham' collision) + clear
   ok("clearDay zeroes calories + water + entries", t.calories === 0 && t.water_oz === 0 && t.entries === 0);
 }
 
+console.log("\n[12] Edit a logged entry + learn it into food memory");
+{
+  nutrition.clearDay();
+  const e = nutrition.logFood({ name: "Chicken bowl", qty: 1, unit: "each", calories: 500, protein: 30, carbs: 50, fat: 15 });
+  const updated = nutrition.updateFoodEntry(e.id, { calories: 650, protein: 45 });   // user corrects it
+  eq("entry calories updated to 650", updated.calories, 650);
+  ok("entry flagged user_edited", updated.source === "user_edited");
+  nutrition.learnFromEntry(updated);
+  const mem = nutrition.findFood("chicken bowl");
+  ok("memory learned the corrected values (650 kcal / 45p)", mem && mem.calories === 650 && mem.protein === 45);
+  // qty > 1: per-unit learned = total / qty
+  const e2 = nutrition.logFood({ name: "Protein waffles", qty: 3, unit: "each", calories: 100, protein: 10, carbs: 14, fat: 2 });
+  const u2 = nutrition.updateFoodEntry(e2.id, { calories: 360 });   // I say the 3 were 360 total
+  nutrition.learnFromEntry(u2);
+  const mem2 = nutrition.findFood("protein waffles");
+  ok("per-unit learned = total/qty (360/3 = 120)", mem2 && mem2.calories === 120);
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

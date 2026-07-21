@@ -317,6 +317,30 @@ export function clearDay(d = todayStr()) {
   return getDay(d);
 }
 
+/** Edit a logged entry in place. `patch` may set name/qty/unit and the entry's TOTAL
+    macros (calories/protein/carbs/fat/fiber for the whole entry). Returns the entry. */
+export function updateFoodEntry(id, patch, d = todayStr()) {
+  const day = getDay(d);
+  const e = day.foods.find((f) => f.id === id);
+  if (!e) return null;
+  if (patch.name != null && String(patch.name).trim()) e.name = String(patch.name).trim();
+  if (patch.qty != null) e.qty = Number(patch.qty) || 1;
+  if (patch.unit !== undefined) e.unit = patch.unit || null;
+  for (const k of MACROS) if (patch[k] != null) e[k] = Math.max(0, Math.round(+patch[k] || 0));
+  e.source = "user_edited";
+  saveDay(day);
+  return e;
+}
+
+/** Learn a food's PER-UNIT nutrition from an (edited) entry, so future logs of it are
+    accurate and consistent. Divides the entry's totals by its qty and saves to memory. */
+export function learnFromEntry(entry) {
+  const qty = entry.qty || 1;
+  const food = { name: entry.name, per: { qty: 1, unit: entry.unit || null }, source: "user_confirmed", confidence: 1 };
+  for (const k of MACROS) food[k] = Math.round((entry[k] || 0) / qty);
+  return setFood(food);
+}
+
 /* Pending CONFIRMATION: a parsed nutrition action we asked the user to confirm before
    applying (keeps it from being "jumpy"). Resolved by their next yes/no/"all"/"one". */
 export function setPendingAction(a) { setItem("nutrition.pendingAction", a); }

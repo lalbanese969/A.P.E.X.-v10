@@ -799,6 +799,20 @@ body {
 .food-item .fkcal { color: var(--color-orange-soft); font-size: 12px; white-space: nowrap; margin-left: 10px; }
 .food-x { flex-shrink: 0; margin-left: 10px; background: transparent; border: none; color: var(--color-text-dim); font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 5px; }
 .food-x:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.12); }
+.food-edit { flex-shrink: 0; margin-left: 8px; background: transparent; border: none; color: var(--color-text-dim); font-size: 13px; line-height: 1; cursor: pointer; padding: 3px 6px; border-radius: 5px; }
+.food-edit:hover { color: var(--color-orange); background: rgba(255, 122, 0, 0.12); }
+/* inline food editor */
+.food-edit-row { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 0; }
+.fe { background: rgba(22, 22, 25, 0.9); border: 1px solid var(--line-soft); color: var(--color-text); border-radius: 6px; padding: 7px 9px; font-family: inherit; font-size: 13px; outline: none; }
+.fe:focus { border-color: rgba(255, 122, 0, 0.5); }
+.fe-name { width: 100%; }
+.fe-line { display: flex; gap: 6px; }
+.fe-line .fe { flex: 1; min-width: 0; width: 100%; }
+.fe-actions { align-items: center; gap: 8px; }
+.fe-learn { flex: 1; font-size: 11px; color: var(--color-text-dim); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.fe-learn input { accent-color: var(--color-orange); }
+.fe-save { background: var(--color-orange); color: #160b00; border: none; font-weight: 700; padding: 7px 16px; border-radius: 7px; cursor: pointer; font-size: 13px; }
+.fe-cancel { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 13px; }
 
 /* today's workout */
 .wo-ex { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
@@ -2384,6 +2398,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   /* ---------- tabs ---------- */
   const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "workout", label: "Workout" }, { id: "metrics", label: "Metrics" }];
   let activeTab = 0;
+  let editingId = null;   // id of the logged food currently being edited (inline editor)
   const panels = document.getElementById("big-panels");
 
   function macroRow(m) {
@@ -2401,11 +2416,36 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     if (u && MEASURE_UNITS.has(u)) return `${qty} ${u} ${name}`;
     return qty > 1 ? `${qty}× ${name}` : name;
   }
+  const escAttr = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   function entryRow(f) {
+    if (editingId === f.id) return editorRow(f);
     return `<div class="food-item"><span class="fname">${fmtQty(f.qty, f.unit, f.name)}` +
       `${f.source === "memory" ? ' <span class="mem-tag">remembered</span>' : ""}</span>` +
       `<span class="fkcal">${f.calories} kcal · ${f.protein}p ${f.carbs}c ${f.fat}f</span>` +
+      `<button class="food-edit" data-id="${f.id}" title="Edit" aria-label="Edit">✎</button>` +
       `<button class="food-x" data-id="${f.id}" title="Remove" aria-label="Remove">×</button></div>`;
+  }
+  // inline editor for one logged item — edit the name/amount/macros, and (optionally)
+  // teach it to the food memory so future logs of this food are accurate.
+  function editorRow(f) {
+    return `<div class="food-item food-edit-row" data-id="${f.id}">
+      <input class="fe fe-name" value="${escAttr(f.name)}" placeholder="food name">
+      <div class="fe-line">
+        <input class="fe fe-qty" type="number" step="any" value="${f.qty}" title="quantity">
+        <input class="fe fe-unit" value="${escAttr(f.unit || "")}" placeholder="unit (oz, cup, each)">
+      </div>
+      <div class="fe-line">
+        <input class="fe fe-cal" type="number" value="${f.calories}" placeholder="cal">
+        <input class="fe fe-pp"  type="number" value="${f.protein}"  placeholder="P">
+        <input class="fe fe-cc"  type="number" value="${f.carbs}"    placeholder="C">
+        <input class="fe fe-ff"  type="number" value="${f.fat}"      placeholder="F">
+      </div>
+      <div class="fe-line fe-actions">
+        <label class="fe-learn"><input type="checkbox" class="fe-learn-cb" checked> remember for next time</label>
+        <button class="fe-cancel">Cancel</button>
+        <button class="fe-save" data-id="${f.id}">Save</button>
+      </div>
+    </div>`;
   }
   function exRow(e, i) {
     return `<div class="wo-ex ${day.done[i] ? "done" : ""}" data-i="${i}">
@@ -2502,6 +2542,27 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     // × on a logged item removes just that entry
     panels.querySelectorAll(".food-x").forEach((b) =>
       b.addEventListener("click", () => { nutritionMod.removeFoodEntry(b.dataset.id); render(); }));
+    // ✎ opens the inline editor for that item
+    panels.querySelectorAll(".food-edit").forEach((b) =>
+      b.addEventListener("click", () => { editingId = b.dataset.id; render(); }));
+    panels.querySelectorAll(".fe-cancel").forEach((b) =>
+      b.addEventListener("click", () => { editingId = null; render(); }));
+    panels.querySelectorAll(".fe-save").forEach((b) =>
+      b.addEventListener("click", () => {
+        const row = b.closest(".food-edit-row"), g = (s) => row.querySelector(s);
+        const patch = {
+          name: g(".fe-name").value,
+          qty: parseFloat(g(".fe-qty").value) || 1,
+          unit: g(".fe-unit").value.trim(),
+          calories: parseFloat(g(".fe-cal").value) || 0,
+          protein: parseFloat(g(".fe-pp").value) || 0,
+          carbs: parseFloat(g(".fe-cc").value) || 0,
+          fat: parseFloat(g(".fe-ff").value) || 0,
+        };
+        const updated = nutritionMod.updateFoodEntry(b.dataset.id, patch);
+        if (updated && g(".fe-learn-cb").checked) nutritionMod.learnFromEntry(updated);   // teach the memory
+        editingId = null; render();
+      }));
     panels.querySelectorAll("#wo-list .wo-ex").forEach((el) =>
       el.addEventListener("click", () => { const i = +el.dataset.i; day.done[i] = !day.done[i]; saveDay(); render(); }));
   }
