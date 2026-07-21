@@ -1415,6 +1415,20 @@ import { APEX_GREETINGS } from "./js/seedData.js";
     for (let i = 0; i < CONFIG.minForms; i++) forms.push(spawnForm());
   }
   window.addEventListener("resize", buildGrid);
+  // Rebuild whenever the CHAT PANEL itself changes size (e.g. dragging the iPhone
+  // divider) — not just on window resize. This keeps hexagons a FIXED size and shows
+  // more/fewer of them to fill the area, instead of stretching (squishing) the bitmap.
+  // The moving light-forms then also stay within the chat window's new bounds.
+  // (Debounced to one rebuild per frame; changing canvas.width doesn't alter the CSS
+  // layout box, so this can't loop.)
+  let roPending = false;
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => {
+      if (roPending) return;
+      roPending = true;
+      requestAnimationFrame(() => { roPending = false; buildGrid(); });
+    }).observe(canvas);
+  }
   init();
   requestAnimationFrame(frame);
 
@@ -2123,7 +2137,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   const ctx = canvas.getContext("2d");
 
   // --- timeline (ms) --- grow (organic fill), brief hold, then clear (reveal)
-  const GROW_MS = 1700, HOLD_MS = 250, CLEAR_MS = 1500;   // open ≈ 3.45s (was ~4.35s)
+  const GROW_MS = 1300, HOLD_MS = 200, CLEAR_MS = 1300;   // open ≈ 2.8s
   const TOTAL = GROW_MS + HOLD_MS + CLEAR_MS;
   const CLOSE_MS = 1400;          // closing speed unchanged (user likes it fast)
   const BAND = 0.16;              // softness of each wavefront (fraction of progress)
