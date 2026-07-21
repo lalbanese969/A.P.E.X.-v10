@@ -857,24 +857,22 @@ body {
 .vgrab {
   display: none;                 /* only shown inside the phone media queries */
   align-items: center; justify-content: center;
-  height: 30px; flex-shrink: 0; position: relative; z-index: 5;   /* taller = easier to grab */
-  background: var(--color-panel);
-  border-top: 3px solid var(--color-orange);            /* thicker, brighter line */
-  box-shadow: 0 0 18px rgba(255, 122, 0, 0.7), inset 0 3px 10px rgba(255, 122, 0, 0.28);
+  height: 22px; flex-shrink: 0; position: relative; z-index: 5;   /* invisible-ish TAP zone... */
+  margin: -8px 0;                /* ...pulled tight so it only takes ~6px of layout space */
+  background: transparent;
   touch-action: none; cursor: grab;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;   /* stop iOS's long-press menu/magnifier from hijacking the hold */
 }
-.vgrab::before {
-  content: ""; width: 60px; height: 6px; border-radius: 999px;
-  background: var(--color-orange); opacity: 1;
-  box-shadow: 0 0 12px rgba(255, 122, 0, 0.95);
-  transition: background 0.15s, width 0.15s, box-shadow 0.15s;
+.vgrab::before {                 /* the actual visual: one slim solid orange line */
+  content: ""; width: 100%; height: 2px;
+  background: var(--color-orange);
+  box-shadow: 0 0 6px rgba(255, 122, 0, 0.55);
+  transition: background 0.15s, height 0.15s, box-shadow 0.15s;
 }
-.vgrab.holding { border-top-color: #ffce7a; }           /* while you're holding to arm */
-.vgrab.holding::before { background: #ffce7a; }
-.vgrab.armed { border-top-color: #ff3b30; box-shadow: 0 0 22px rgba(255, 59, 48, 0.85), inset 0 3px 10px rgba(255, 59, 48, 0.3); cursor: grabbing; } /* RED = movable */
-.vgrab.armed::before { background: #ff3b30; width: 78px; box-shadow: 0 0 14px rgba(255, 59, 48, 0.95); }
+.vgrab.holding::before { background: #ffce7a; }         /* while you're holding to arm */
+.vgrab.armed { cursor: grabbing; }
+.vgrab.armed::before { background: #ff3b30; height: 3px; box-shadow: 0 0 8px rgba(255, 59, 48, 0.85); } /* RED = movable */
 
 /* --- scrollbar styling (orange-tinted) --- */
 ::-webkit-scrollbar { width: 8px; }
