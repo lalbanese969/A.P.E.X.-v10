@@ -61,14 +61,24 @@ more mature pipeline is ever needed again.
   may extend or replace this.
 - **Slash commands + fullscreen "takeover" modes** — type `/` in the chat box for a command
   palette. `/open sim` opens the Simulations lab (embedded iframe); `/big` opens **Workout APEX**.
-  Both use one shared `[JS:TAKEOVER]` factory in `index.html` (honeycomb grid grows in, then clears
-  from the center leaving a glowing edge frame, revealing the content; Esc / Exit reverses it).
-  **Workout APEX (`/big`)** = a live APEX chat on the LEFT (same pipeline/brain as the main chat) +
-  workout & nutrition panels on the RIGHT: **Today · Macros** (calories/protein/carbs/fat vs goal),
-  **Food Log** ("what did you eat?" → adds an item), and **Today · Push Day** (tap exercises to
-  check off, with a progress bar + streak). **UI-first: the right panels are MOCK for now** — real
-  nutrition estimation and workout logic come later. (Verified via Playwright: takeover reveal,
-  food-add, check-off, Esc close, and `/open sim` still works — no console errors.)
+  Both use one shared `[JS:TAKEOVER]` factory in `index.html`: the honeycomb **grows out of the live
+  background blobs** (seeded via `window.APEX.honeycombSeeds()`, branching organically), fills, then
+  clears from the center until **every** hex is gone (no edge frame), revealing the content; Esc /
+  Exit reverses it. Timing knobs live at the top of the factory.
+- **Workout APEX (`/big`) — APEX's personal-trainer mode.** Left = a **coach chat** on a *lighter*
+  path (`pipeline.handleCoachPrompt`): fitness/nutrition-focused, **skips the email/calendar action
+  machinery**, and is fed a one-line snapshot of today's numbers so it can coach on what you ate /
+  your water / your session. Right = **tabbed panels** (switch by click or **←/→ arrows**):
+  **Nutrition** (macros vs. goal that sum from the food log, a **water jug that fills orange** logged
+  in **fl oz**, and the food log), **Workout** (today's exercises, tap to check off, progress), and
+  **Metrics** (sleep/steps/HR/weight — **sample data; Apple Watch sync is a later phase**). Today's
+  nutrition/water/workout are **tracked in `localStorage` (`apex.big.day`) and reset each new day**.
+  Units are **imperial (oz/lb/ft)**. **Responsive & auto-detected**: iPad/desktop = chat left + tabs
+  right; **iPhone = stacked with the panels on top and the chat at the bottom**. Food estimates are
+  still mock (real nutrition/workout logic is the next function pass). (Verified via Playwright:
+  tabs, arrow-nav, water jug + macro totals, check-off, per-day persistence across reload, and the
+  iPhone-stacked order — no console errors.) *Noted for later: a separate installable
+  "today's workout" PWA you add to your phone's home screen for the gym.*
 - **GitHub repo**: https://github.com/lalbanese969/A.P.E.X.-v10.
 
 ## 📦 Archived (not deleted)

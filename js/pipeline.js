@@ -82,6 +82,43 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
   return result;
 }
 
+/* ============================================================================
+   COACH MODE — the lightweight path behind the /big "Workout APEX" chat.
+   Deliberately does NOT classify intents or run any email/calendar actions (that
+   heavy machinery isn't wanted in the trainer view). It's a single AI call with a
+   personal-trainer/health system prompt plus the user's own facts and today's
+   fitness snapshot, so APEX can coach on training, nutrition, sleep, hydration.
+   Memory still learns from it in the background (health facts are worth keeping).
+   ============================================================================ */
+export async function handleCoachPrompt(userPrompt, health = "") {
+  const prompt = (userPrompt || "").trim();
+  const packet = memory.buildPacket(prompt);
+  const result = { user_prompt: prompt, intent: "coach", ai_meta: { provider: null, model: null } };
+
+  try {
+    const system = coachSystem() + "\n\n" + contextBlock(packet, { user: memory.userBrief(), health });
+    const r = await runTask("user_answer", [{ role: "system", content: system }, { role: "user", content: prompt }]);
+    result.apex_response = r.text;
+    result.ai_meta = { provider: r.provider, model: r.model };
+  } catch (e) {
+    if (e instanceof AIError) result.apex_response = memoryOnlyFallback(packet, e.message);
+    else throw e;
+  }
+
+  memory.learnFromInteraction(prompt, result.apex_response || "").catch(() => {});
+  return result;
+}
+
+function coachSystem() {
+  return systemBase() +
+    ` Right now you are in WORKOUT & HEALTH mode — you are sir's personal trainer and nutrition ` +
+    `coach. Keep the focus on training, nutrition, recovery, sleep, hydration and motivation. ` +
+    `When he tells you what he ate, give a quick, practical nutrition estimate (calories + rough ` +
+    `protein/carbs/fat) and how it fits his day. Suggest specific tweaks to hit his goals and be ` +
+    `encouraging without the fluff. You are NOT handling email or calendar here — if he asks for ` +
+    `those, tell him to hop back to the main chat. Use the fitness snapshot below when relevant.`;
+}
+
 /* ---- intent heuristic (regex rules, ported from pipeline.py:_heuristic_intent) --- */
 
 function heuristicIntent(prompt, hasPriorDraft) {
@@ -311,9 +348,10 @@ function systemBase() {
     `below when relevant; never invent facts that aren't given.`;
 }
 
-function contextBlock(packet, { calendar, emails, user } = {}) {
+function contextBlock(packet, { calendar, emails, user, health } = {}) {
   const parts = ["CONTEXT:"];
   if (user) parts.push("About the user (sir): " + user);
+  if (health) parts.push("Today's fitness snapshot: " + health);
   if (packet.memory_needed && packet.loaded_records?.length) {
     parts.push("Memory: " + JSON.stringify(packet.loaded_records));
   }
