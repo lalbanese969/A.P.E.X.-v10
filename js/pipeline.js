@@ -18,6 +18,8 @@
 import * as memory from "./memory.js";
 import * as connections from "./connections.js";
 import * as settingsMod from "./settings.js";
+import * as profile from "./profile.js";
+import * as nutrition from "./nutrition.js";
 import { runTask, AIError } from "./aiCenter.js";
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
@@ -95,8 +97,26 @@ export async function handleCoachPrompt(userPrompt, health = "") {
   const packet = memory.buildPacket(prompt);
   const result = { user_prompt: prompt, intent: "coach", ai_meta: { provider: null, model: null } };
 
+  // NUTRITION-LOGGING PATH: "I ate 2 eggs and a bagel" / "drank another 32 oz" ->
+  // extract, reuse remembered foods for consistency, write to today's log, and
+  // confirm with the running totals. Falls through to normal coaching on failure.
+  if (looksLikeNutritionLog(prompt)) {
+    try {
+      const res = await logNutritionFromText(prompt);
+      if (res && (res.logged.length || res.water_oz)) {
+        result.intent = "nutrition_log";
+        result.apex_response = res.message;
+        result.nutrition = res;
+        result.ai_meta = res.ai_meta;
+        memory.learnFromInteraction(prompt, "").catch(() => {});
+        return result;
+      }
+    } catch (e) { /* fall through to normal coaching */ }
+  }
+
   try {
-    const system = coachSystem() + "\n\n" + contextBlock(packet, { user: memory.userBrief(), health });
+    const snapshot = profile.profileBrief() + "  Today so far: " + nutritionTodayLine();
+    const system = coachSystem() + "\n\n" + contextBlock(packet, { user: memory.userBrief(), health: snapshot });
     const r = await runTask("user_answer", [{ role: "system", content: system }, { role: "user", content: prompt }]);
     result.apex_response = r.text;
     result.ai_meta = { provider: r.provider, model: r.model };
@@ -110,13 +130,91 @@ export async function handleCoachPrompt(userPrompt, health = "") {
 }
 
 function coachSystem() {
+  const allergens = profile.getAllergens();
+  const allergyLine = allergens.length
+    ? ` IMPORTANT: sir has a DAIRY (milk-protein) allergy — never suggest whey, casein, or dairy foods (${allergens.slice(0, 6).join(", ")}…), and remind him to check labels.`
+    : "";
   return systemBase() +
     ` Right now you are in WORKOUT & HEALTH mode — you are sir's personal trainer and nutrition ` +
     `coach. Keep the focus on training, nutrition, recovery, sleep, hydration and motivation. ` +
-    `When he tells you what he ate, give a quick, practical nutrition estimate (calories + rough ` +
-    `protein/carbs/fat) and how it fits his day. Suggest specific tweaks to hit his goals and be ` +
-    `encouraging without the fluff. You are NOT handling email or calendar here — if he asks for ` +
-    `those, tell him to hop back to the main chat. Use the fitness snapshot below when relevant.`;
+    `Coach from his profile + today's numbers in the snapshot below; treat calorie/macro TARGETS as ` +
+    `estimates, not gospel, and judge trends over weeks, not one reading. Suggest specific tweaks and ` +
+    `be encouraging without the fluff. You are NOT handling email or calendar here — send him back to ` +
+    `the main chat for those.` + allergyLine;
+}
+
+/* ---- nutrition logging from chat -------------------------------------------- */
+
+// Cheap gate: does this message look like the user logging food/drink?
+function looksLikeNutritionLog(p) {
+  const t = (p || "").toLowerCase();
+  return /\b(i (ate|had|eat|drank|consumed|made)|just (ate|had|drank|made)|log (this|that|it|my)|(for )?(breakfast|lunch|dinner)|as a snack|had a|ate a)\b/.test(t)
+    || (/\b\d+(\.\d+)?\s*(oz|ounce|ounces|ml|l|liter|litre|cup|cups|glass|glasses|bottle|bottles)\b/.test(t)
+        && /\b(water|drank|drink|drinking|hydrat|fluids?)\b/.test(t));
+}
+
+// Compact "today so far vs goal" line for coaching context.
+function nutritionTodayLine() {
+  const t = nutrition.dayTotals(), g = profile.dailyGoal();
+  return `${t.calories}/${g.kcal} kcal, protein ${t.protein}/${g.protein}g, carbs ${t.carbs}/${g.carbs}g, ` +
+    `fat ${t.fat}/${g.fat}g, fiber ${t.fiber}/${g.fiber}g, water ${t.water_oz}/${g.water_oz} oz.`;
+}
+
+async function logNutritionFromText(prompt) {
+  const allergens = profile.getAllergens();
+  const sys =
+    "Extract food/drink LOGGING from the user's message as JSON, for a nutrition tracker. Return ONLY: " +
+    "{\"foods\":[{\"name\":string,\"qty\":number,\"unit\":string,\"calories\":number,\"protein\":number," +
+    "\"carbs\":number,\"fat\":number,\"fiber\":number,\"maybe_dairy\":boolean}],\"water_oz\":number}. " +
+    "MACROS ARE PER ONE UNIT (one item/serving); qty is how many. Estimate realistic US values. " +
+    "Water in fl oz: 'a bottle'≈20, 'a glass'≈8, '1 L'≈34. maybe_dairy=true if it commonly contains " +
+    "milk/cheese/butter/cream/whey/casein (user has a dairy allergy: " + allergens.slice(0, 8).join(", ") + "). " +
+    "If no food, foods=[]. If no drink, water_oz=0.";
+  const model = settingsMod.getSettings().groqFastModel;
+  const r = await runTask("nutrition_extract",
+    [{ role: "system", content: sys }, { role: "user", content: prompt }], { model, jsonMode: true });
+  const parsed = JSON.parse(stripFences(r.text));
+  const foods = Array.isArray(parsed.foods) ? parsed.foods : [];
+  const water = Math.max(0, Number(parsed.water_oz) || 0);
+
+  const logged = [], dairy = [];
+  for (const f of foods) {
+    if (!f || !f.name) continue;
+    const qty = Number(f.qty) || 1;
+    // FOOD MEMORY: if we've logged this before, reuse its macros for consistency.
+    const known = nutrition.findFood(f.name);
+    const per = known
+      ? { calories: known.calories, protein: known.protein, carbs: known.carbs, fat: known.fat, fiber: known.fiber, sodium: known.sodium || 0 }
+      : { calories: +f.calories || 0, protein: +f.protein || 0, carbs: +f.carbs || 0, fat: +f.fat || 0, fiber: +f.fiber || 0, sodium: 0 };
+    nutrition.logFood({ name: f.name, qty, unit: f.unit || null, ...per,
+      source: known ? "memory" : "ai_estimate", confidence: known ? 0.9 : 0.5, dairy: !!f.maybe_dairy });
+    logged.push({ name: f.name, qty, unit: f.unit || null, calories: Math.round(per.calories * qty), fromMemory: !!known });
+    if (f.maybe_dairy) dairy.push(f.name);
+  }
+  if (water > 0) nutrition.logWater(water);
+
+  const totals = nutrition.dayTotals(), goal = profile.dailyGoal();
+  return { logged, water_oz: water, dairy, totals, goal,
+    message: buildLogMessage(logged, water, dairy, totals, goal),
+    ai_meta: { provider: r.provider, model: r.model } };
+}
+
+function buildLogMessage(logged, water, dairy, totals, goal) {
+  const bits = [];
+  if (logged.length) {
+    bits.push("Logged, sir — " + logged.map((l) =>
+      `${l.qty > 1 ? l.qty + "× " : ""}${l.name} (~${l.calories} kcal${l.fromMemory ? ", remembered" : ""})`).join(", ") + ".");
+  }
+  if (water > 0) bits.push(`+${water} oz water.`);
+  const pLeft = Math.max(0, goal.protein - totals.protein);
+  bits.push(`Day: ${totals.calories}/${goal.kcal} kcal · protein ${totals.protein}/${goal.protein}g` +
+    `${pLeft > 0 ? ` (${pLeft}g to go)` : " ✓"} · water ${totals.water_oz}/${goal.water_oz} oz.`);
+  if (dairy.length) bits.push(`Heads up — ${dairy.join(", ")} may contain dairy; check the label (milk-protein allergy).`);
+  return bits.join(" ");
+}
+
+function stripFences(s) {
+  return String(s || "").replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
 }
 
 /* ---- intent heuristic (regex rules, ported from pipeline.py:_heuristic_intent) --- */

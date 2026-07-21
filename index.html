@@ -837,6 +837,23 @@ body {
 .watch-note b { color: var(--color-orange-soft); font-weight: 600; }
 .watch-btn { margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: 1px dashed var(--line); background: transparent; color: var(--color-text-dim); font-family: inherit; font-size: 13px; font-weight: 600; cursor: not-allowed; }
 
+/* nutrition dashboard visuals — calories gauge + water bottle + fiber + memory tag */
+.hero-row { display: flex; gap: 18px; align-items: stretch; }
+.hero-cal { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+.cal-big { font-size: 30px; font-weight: 800; color: var(--color-text); line-height: 1; }
+.cal-big b { color: var(--color-orange); }
+.cal-big span { font-size: 15px; color: var(--color-text-dim); font-weight: 600; margin-left: 6px; }
+.macro-bar.big { height: 12px; }
+.bottle-wrap { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.bottle { position: relative; width: 66px; height: 132px; border: 2px solid var(--line); border-radius: 9px 9px 22px 22px; overflow: hidden; background: rgba(255, 255, 255, 0.03); margin-top: 8px; }
+.bottle-cap { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); width: 26px; height: 10px; border-radius: 4px 4px 0 0; background: var(--color-orange); box-shadow: 0 0 8px rgba(255, 122, 0, 0.6); }
+.bottle-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, #ff7a00, #ffb257); box-shadow: 0 0 16px rgba(255, 122, 0, 0.5); transition: height 0.5s cubic-bezier(.4, 0, .2, 1); }
+.bottle-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; color: var(--color-text); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75); }
+.bottle-pct small { font-size: 10px; margin-left: 1px; }
+.macro-fill.fb { background: #8a5a12; }
+.mem-tag { font-size: 10px; color: var(--color-orange-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+@media (max-width: 760px) { .hero-row { flex-direction: column; align-items: center; } .hero-cal { width: 100%; } }
+
 /* --- responsive: iPad = side-by-side; iPhone (narrow) = stacked, content on TOP, chat at BOTTOM --- */
 @media (max-width: 720px) {
   .big-body { flex-direction: column; }
@@ -1134,6 +1151,8 @@ import * as memoryMod from "./js/memory.js";
 import * as pipelineMod from "./js/pipeline.js";
 import * as connectionsMod from "./js/connections.js";
 import * as settingsMod from "./js/settings.js";
+import * as profileMod from "./js/profile.js";
+import * as nutritionMod from "./js/nutrition.js";
 import { APEX_GREETINGS } from "./js/seedData.js";
 
 /* ============================================================================
@@ -2318,8 +2337,9 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   window.APEX = window.APEX || {};
   window.APEX.closeBig = big.close;
 
-  /* ---------- goals + today's workout (fixed for now; user-editable later) ---------- */
-  const GOALS = { cal: 2400, protein: 180, carbs: 260, fat: 70, water: 100 /* fl oz */ };
+  /* ---------- today's workout (nutrition + water now live in js/nutrition.js;
+       calorie/macro targets come from js/profile.js). `day` below only holds
+       the workout check-offs. ---------- */
   const WORKOUT = {
     title: "Push Day",
     ex: [
@@ -2357,18 +2377,6 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     day.done = WORKOUT.ex.map((_, i) => !!(day.done && day.done[i]));
   }
 
-  const consumed = () => day.foods.reduce(
-    (a, f) => ({ kcal: a.kcal + (f.kcal || 0), p: a.p + (f.p || 0), c: a.c + (f.c || 0), f: a.f + (f.f || 0) }),
-    { kcal: 0, p: 0, c: 0, f: 0 });
-
-  // compact one-line snapshot handed to the coach chat so APEX knows the day's numbers
-  function healthSummary() {
-    const c = consumed(), done = day.done.filter(Boolean).length;
-    return `Calories ${c.kcal}/${GOALS.cal} kcal, protein ${c.p}/${GOALS.protein}g, carbs ${c.c}/${GOALS.carbs}g, ` +
-      `fat ${c.f}/${GOALS.fat}g. Water ${day.water}/${GOALS.water} oz. ` +
-      `Workout ${WORKOUT.title}: ${done}/${WORKOUT.ex.length} exercises done.`;
-  }
-
   /* ---------- tabs ---------- */
   const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "workout", label: "Workout" }, { id: "metrics", label: "Metrics" }];
   let activeTab = 0;
@@ -2382,8 +2390,10 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       <div class="macro-bar"><div class="macro-fill ${m.cls}" style="width:${pct}%"></div></div>
     </div>`;
   }
-  function foodRow(f) {
-    return `<div class="food-item"><span class="fname">${f.name}</span><span class="fkcal">≈ ${f.kcal} kcal · ${f.p}p ${f.c}c ${f.f}f</span></div>`;
+  function entryRow(f) {
+    return `<div class="food-item"><span class="fname">${f.qty > 1 ? f.qty + "× " : ""}${f.name}` +
+      `${f.source === "memory" ? ' <span class="mem-tag">remembered</span>' : ""}</span>` +
+      `<span class="fkcal">${f.calories} kcal · ${f.protein}p ${f.carbs}c ${f.fat}f</span></div>`;
   }
   function exRow(e, i) {
     return `<div class="wo-ex ${day.done[i] ? "done" : ""}" data-i="${i}">
@@ -2392,40 +2402,38 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   }
 
   function nutritionHTML() {
-    const c = consumed();
+    const t = nutritionMod.dayTotals();
+    const g = profileMod.dailyGoal();
+    const foods = nutritionMod.getDay().foods;
+    const clamp = (v, goal) => Math.min(100, Math.round((v / goal) * 100));
+    const wpct = clamp(t.water_oz, g.water_oz), calpct = clamp(t.calories, g.kcal);
     const M = [
-      { label: "Calories", val: c.kcal, goal: GOALS.cal,     unit: "kcal", cls: ""  },
-      { label: "Protein",  val: c.p,    goal: GOALS.protein, unit: "g",    cls: "p" },
-      { label: "Carbs",    val: c.c,    goal: GOALS.carbs,   unit: "g",    cls: "c" },
-      { label: "Fat",      val: c.f,    goal: GOALS.fat,     unit: "g",    cls: "f" },
+      { label: "Protein", val: Math.round(t.protein), goal: g.protein, unit: "g", cls: "p"  },
+      { label: "Carbs",   val: Math.round(t.carbs),   goal: g.carbs,   unit: "g", cls: "c"  },
+      { label: "Fat",     val: Math.round(t.fat),     goal: g.fat,     unit: "g", cls: "f"  },
+      { label: "Fiber",   val: Math.round(t.fiber),   goal: g.fiber,   unit: "g", cls: "fb" },
     ];
-    const wpct = Math.min(100, Math.round((day.water / GOALS.water) * 100));
     return `
+      <div class="bcard hero-row">
+        <div class="hero-cal">
+          <div class="bcard-title">Calories</div>
+          <div class="cal-big"><b>${Math.round(t.calories)}</b><span>/ ${g.kcal}</span></div>
+          <div class="macro-bar big"><div class="macro-fill" style="width:${calpct}%"></div></div>
+          <div class="bcard-note">${Math.max(0, g.kcal - Math.round(t.calories))} kcal left · target is an estimate</div>
+        </div>
+        <div class="bottle-wrap">
+          <div class="bottle"><div class="bottle-cap"></div><div class="bottle-fill" style="height:${wpct}%"></div><div class="bottle-pct">${t.water_oz}<small>oz</small></div></div>
+          <div class="bcard-note" style="text-align:center;">water · ${wpct}% of ${g.water_oz}</div>
+        </div>
+      </div>
       <div class="bcard">
-        <div class="bcard-head"><span class="bcard-title">Today · Macros</span><span class="bcard-note">vs. goal</span></div>
+        <div class="bcard-head"><span class="bcard-title">Macros</span><span class="bcard-note">vs. goal</span></div>
         ${M.map(macroRow).join("")}
       </div>
       <div class="bcard">
-        <div class="bcard-head"><span class="bcard-title">Water</span><span class="bcard-note">goal ${GOALS.water} oz</span></div>
-        <div class="water-wrap">
-          <div class="jug"><div class="jug-fill" style="height:${wpct}%"></div><div class="jug-pct">${wpct}%</div></div>
-          <div class="water-right">
-            <div class="water-amt"><b>${day.water}</b> / ${GOALS.water} oz</div>
-            <div class="water-goal">Or just tell me in chat — e.g. "I drank a bottle".</div>
-            <div class="water-btns">
-              <button data-oz="8">+8</button><button data-oz="12">+12</button>
-              <button data-oz="16">+16</button><button data-oz="-8" class="minus">−8</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="bcard">
-        <div class="bcard-head"><span class="bcard-title">Food Log</span><span class="bcard-note">estimates are placeholder</span></div>
-        <div class="food-input">
-          <input id="food-name" type="text" placeholder="What did you eat?" autocomplete="off" />
-          <button id="food-add">Add</button>
-        </div>
-        <div id="food-list">${day.foods.length ? day.foods.map(foodRow).join("") : `<div class="bcard-note">Nothing logged yet, sir.</div>`}</div>
+        <div class="bcard-head"><span class="bcard-title">Today's food</span><span class="bcard-note">log by telling APEX →</span></div>
+        <div id="food-list">${foods.length ? foods.map(entryRow).join("")
+          : `<div class="bcard-note">Nothing logged yet — just tell APEX in chat: “I ate 2 eggs and a bagel” or “drank 24 oz”.</div>`}</div>
       </div>`;
   }
   function workoutHTML() {
@@ -2471,25 +2479,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   function wire() {
     panels.querySelectorAll(".big-tab").forEach((b) =>
       b.addEventListener("click", () => { activeTab = +b.dataset.tab; render(); }));
-
-    const nameInp = document.getElementById("food-name");
-    if (nameInp) {
-      const addFood = () => {
-        const v = nameInp.value.trim();
-        if (!v) return;
-        // mock but self-consistent estimate (kcal derived from macros) until real nutrition logic lands
-        const p = 8 + Math.round(Math.random() * 34), cc = 10 + Math.round(Math.random() * 55), ff = 3 + Math.round(Math.random() * 17);
-        day.foods.push({ name: v, kcal: p * 4 + cc * 4 + ff * 9, p, c: cc, f: ff });
-        saveDay(); render();
-        const n = document.getElementById("food-name"); if (n) n.focus();
-      };
-      document.getElementById("food-add").addEventListener("click", addFood);
-      nameInp.addEventListener("keydown", (e) => { if (e.key === "Enter") addFood(); });
-    }
-
-    panels.querySelectorAll(".water-btns button").forEach((b) =>
-      b.addEventListener("click", () => { day.water = Math.max(0, day.water + (+b.dataset.oz)); saveDay(); render(); }));
-
+    // nutrition + water are logged by talking to APEX (see the coach chat send()), not buttons.
     panels.querySelectorAll("#wo-list .wo-ex").forEach((el) =>
       el.addEventListener("click", () => { const i = +el.dataset.i; day.done[i] = !day.done[i]; saveDay(); render(); }));
   }
@@ -2525,11 +2515,12 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     input.value = "";
     const thinking = addMessage("Thinking, sir…", "apex");
     try {
-      const data = await pipelineMod.handleCoachPrompt(text, healthSummary());
+      const data = await pipelineMod.handleCoachPrompt(text);
       thinking.textContent = data.apex_response;
-      // If the coach may have moved the numbers (food/water), refresh the panels.
+      // If APEX just logged food/water, jump to Nutrition so the bars visibly move.
+      if (data.intent === "nutrition_log") activeTab = 0;
       render();
-      console.log("[A.P.E.X./coach]", { ai: data.ai_meta });
+      console.log("[A.P.E.X./coach]", { intent: data.intent, ai: data.ai_meta });
     } catch (err) {
       console.error(err);
       thinking.textContent = "(something went sideways, sir — check DevTools console)";
@@ -2544,6 +2535,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       greeted = true;
       addMessage("Trainer mode, sir. Tell me what you ate and I'll estimate it, log your water, or program your session — let's get you fit.", "apex");
     }
+    render();   // refresh the dashboard from the latest profile/nutrition data every open
     big.open();
     if (window.APEX.applyBigSplit) window.APEX.applyBigSplit();   // restore saved iPhone split
     setTimeout(() => input.focus(), 700);
