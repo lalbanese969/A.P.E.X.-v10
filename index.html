@@ -1262,6 +1262,23 @@ import { APEX_GREETINGS } from "./js/seedData.js";
   window.addEventListener("resize", buildGrid);
   init();
   requestAnimationFrame(frame);
+
+  /* Expose the live moving light-forms (in VIEWPORT coords) so the fullscreen
+     takeovers can grow their honeycomb OUT of the same blobs drifting across the
+     chat — the reveal appears to BRANCH off the background instead of just
+     popping in. Returns each active form's head; falls back to the panel center. */
+  window.APEX = window.APEX || {};
+  window.APEX.honeycombSeeds = function () {
+    const rect = canvas.getBoundingClientRect();
+    const seeds = [];
+    for (const f of forms) {
+      if (f.intensity <= 0.05) continue;
+      const head = f.nodes[0];
+      seeds.push({ x: rect.left + head.x, y: rect.top + head.y });
+    }
+    if (!seeds.length) seeds.push({ x: rect.left + W / 2, y: rect.top + H / 2 });
+    return seeds;
+  };
 })();
 
 
@@ -1936,21 +1953,25 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 
 /* ============================================================================
    [JS:TAKEOVER]  —  reusable fullscreen honeycomb takeover.
-   A honeycomb grid GROWS in over the whole screen, then a soft wave CLEARS the
-   hexes from the center outward (leaving a glowing honeycomb frame around the
-   edges) and fades in `content` underneath. Esc / the close button reverses it.
+   The honeycomb GROWS OUT of the live blobs moving across the chat (seeded from
+   window.APEX.honeycombSeeds), branching organically until the screen is full,
+   then CLEARS from the center outward until EVERY hex is gone (no leftover edge
+   frame), fading in `content` underneath. Esc / the close button reverses it.
    Shared by /open sim (iframe) and /big (the Workout APEX panel).
    ============================================================================ */
 function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   const ctx = canvas.getContext("2d");
 
-  const OPEN_MS = 1350;   // animation length
-  const GROW = 0.32;      // fraction of timeline spent growing the honeycomb in
-  const HEXR = 30;        // hexagon size
-  const BAND = 66;        // px band around the edges that stays lit (the frame)
-  const FEATHER = 140;    // softness of the clearing wavefront
+  // --- timeline (ms) --- grow slow & organic, brief hold, slightly faster clear
+  const GROW_MS = 2600, HOLD_MS = 250, CLEAR_MS = 1500;
+  const TOTAL = GROW_MS + HOLD_MS + CLEAR_MS;
+  const CLOSE_MS = 1400;          // reverse is quicker
+  const BAND = 0.16;              // softness of each wavefront (fraction of progress)
+  const JITTER = 0.14;            // raggedness so growth/clear look organic, not a clean ring
+  const HEXR = 30;                // hexagon size
 
-  let hexes = [], W = 0, H = 0, raf = null, startTs = 0, opening = true, t = 0, firstOpened = false;
+  let hexes = [], growT = [], clearT = [];   // per-hex thresholds (0..1), baked on open
+  let W = 0, H = 0, raf = null, startTs = 0, opening = true, firstOpened = false;
 
   function build() {
     const dpr = window.devicePixelRatio || 1;
@@ -1967,6 +1988,30 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       col++;
     }
   }
+
+  // Bake each hex's grow order (distance from the nearest live blob → branches out
+  // from the moving light-forms) and clear order (distance from center → clears
+  // from the middle out). Jitter keeps both wavefronts ragged/organic.
+  function computeThresholds() {
+    const seeds = (window.APEX && window.APEX.honeycombSeeds)
+      ? window.APEX.honeycombSeeds() : [{ x: W / 2, y: H / 2 }];
+    const cx = W / 2, cy = H / 2;
+    const gd = new Array(hexes.length), cd = new Array(hexes.length);
+    let maxG = 0.0001, maxC = 0.0001;
+    for (let i = 0; i < hexes.length; i++) {
+      const h = hexes[i];
+      let dmin = Infinity;
+      for (const s of seeds) { const d = Math.hypot(h.x - s.x, h.y - s.y); if (d < dmin) dmin = d; }
+      gd[i] = dmin; if (dmin > maxG) maxG = dmin;
+      cd[i] = Math.hypot(h.x - cx, h.y - cy); if (cd[i] > maxC) maxC = cd[i];
+    }
+    growT = new Array(hexes.length); clearT = new Array(hexes.length);
+    for (let i = 0; i < hexes.length; i++) {
+      growT[i]  = Math.max(0, Math.min(1, gd[i] / maxG + (Math.random() - 0.5) * 2 * JITTER));
+      clearT[i] = Math.max(0, Math.min(1, cd[i] / maxC + (Math.random() - 0.5) * 2 * JITTER));
+    }
+  }
+
   function hexPath(cx, cy, r) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
@@ -1976,47 +2021,46 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     }
     ctx.closePath();
   }
-  function drawHex(cx, cy, r, alpha) {
+  // Match the background honeycomb's glow look (same tone + bloom) so the two blend.
+  function drawHex(cx, cy, r, glow) {
+    const a = Math.min(glow, 1);
     hexPath(cx, cy, r);
-    const a = Math.min(alpha, 1);
-    ctx.strokeStyle = `rgba(255,122,0,${a})`;
-    ctx.lineWidth = 1.4;
-    ctx.shadowColor = `rgba(255,122,0,${a * 0.9})`;
-    ctx.shadowBlur = 10 * a;
+    ctx.strokeStyle = `rgba(255,106,0,${0.05 + a * 0.85})`;
+    ctx.lineWidth = 0.5 + a * 2.4;
+    if (a > 0.5) { ctx.shadowColor = "rgba(255,106,0,0.55)"; ctx.shadowBlur = (a - 0.5) * 2 * 14; }
     ctx.stroke();
     ctx.shadowBlur = 0;
   }
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    const cx = W / 2, cy = H / 2, maxD = Math.hypot(cx, cy);
-    const grow = Math.min(1, t / GROW);
-    const rev = t <= GROW ? 0 : (t - GROW) / (1 - GROW);   // 0..1 clearing progress
-    const rr = rev * (maxD * 1.06);                        // clearing wavefront radius
-    for (const h of hexes) {
-      const dist = Math.hypot(h.x - cx, h.y - cy);
-      const edge = h.x < BAND || h.x > W - BAND || h.y < BAND || h.y > H - BAND;
-      let a;
-      if (t <= GROW) {
-        a = grow;
-      } else if (edge) {
-        a = 1;                                             // edge frame always lit
-      } else if (dist <= rr - FEATHER) {
-        a = 0;                                             // fully cleared (content shows)
-      } else if (dist < rr) {
-        a = (dist - (rr - FEATHER)) / FEATHER;             // soft wavefront
-      } else {
-        a = 1;
-      }
-      const scale = t <= GROW ? (0.25 + 0.75 * grow) : 1;
-      if (a > 0.02) drawHex(h.x, h.y, HEXR * scale, a);
+
+  // lit value 0..1 for a hex at a given elapsed time on the timeline
+  function litAt(i, elapsed) {
+    if (elapsed <= GROW_MS) {
+      const p = elapsed / GROW_MS;
+      return Math.max(0, Math.min(1, (p * (1 + BAND) - growT[i]) / BAND));
     }
-    content.style.opacity = t <= GROW ? 0 : Math.min(1, rev * 1.4);
+    if (elapsed <= GROW_MS + HOLD_MS) return 1;
+    const q = (elapsed - GROW_MS - HOLD_MS) / CLEAR_MS;
+    return 1 - Math.max(0, Math.min(1, (q * (1 + BAND) - clearT[i]) / BAND));
+  }
+  function contentOpacity(elapsed) {
+    if (elapsed <= GROW_MS + HOLD_MS) return 0;               // hidden while the screen fills
+    const q = (elapsed - GROW_MS - HOLD_MS) / CLEAR_MS;
+    return Math.min(1, q * 1.3);                              // fade up as the center clears
+  }
+  function draw(elapsed) {
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < hexes.length; i++) {
+      const lit = litAt(i, elapsed);
+      if (lit > 0.02) drawHex(hexes[i].x, hexes[i].y, HEXR * (0.35 + 0.65 * lit), lit);
+    }
+    content.style.opacity = contentOpacity(elapsed);
   }
   function frame(ts) {
     if (!startTs) startTs = ts;
-    const prog = Math.min(1, (ts - startTs) / OPEN_MS);
-    t = opening ? prog : 1 - prog;
-    draw();
+    const dur = opening ? TOTAL : CLOSE_MS;
+    const prog = Math.min(1, (ts - startTs) / dur);
+    const elapsed = (opening ? prog : 1 - prog) * TOTAL;
+    draw(elapsed);
     if (prog < 1) { raf = requestAnimationFrame(frame); }
     else {
       raf = null; startTs = 0;
@@ -2030,6 +2074,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     if (!firstOpened) { firstOpened = true; if (onFirstOpen) onFirstOpen(); }
     overlay.classList.add("on");
     build();
+    computeThresholds();
     closeBtn.style.display = "none";
     content.style.opacity = 0;
     opening = true; startTs = 0;

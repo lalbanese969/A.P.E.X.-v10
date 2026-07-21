@@ -1,7 +1,12 @@
 # PLAN — Rework the `/open sim` takeover to a slow, seeded honeycomb grow→fill→clear
 
-> Status: **PLAN ONLY, not built yet.** Say "execute the sim takeover plan" to build it.
-> This replaces the current `[JS:SIM]` overlay animation in `index.html`.
+> Status: **CORE BUILT (2026-07-21).** The shared `[JS:TAKEOVER]` factory in `index.html` now
+> seeds growth from the live background blobs (`window.APEX.honeycombSeeds()`), grows organically
+> outward (branching, ragged), holds, then clears from the center until **every** hex is gone (no
+> edge frame), matching the background glow tone. Used by BOTH `/open sim` and `/big`. Timing lives
+> in the factory's CONFIG (`GROW_MS 2600 / HOLD_MS 250 / CLEAR_MS 1500`, `BAND`, `JITTER`, `HEXR`) —
+> bump `GROW_MS` toward ~5000 if a slower fill is wanted. Remaining polish (multi-lobe tuning, a
+> fancier exit) is optional. What's below is the original spec, kept for reference.
 
 ## The vision (user's words, decoded)
 When you run `/open sim`, instead of the current quick radial-clear-with-edge-frame:
