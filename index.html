@@ -2394,8 +2394,15 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       <div class="macro-bar"><div class="macro-fill ${m.cls}" style="width:${pct}%"></div></div>
     </div>`;
   }
+  // weight/volume amounts read as "10 oz turkey"; countable items as "2× banana"
+  const MEASURE_UNITS = new Set(["oz", "ounce", "ounces", "g", "gram", "grams", "kg", "ml", "l", "liter", "litre", "cup", "cups", "tbsp", "tsp", "fl oz"]);
+  function fmtQty(qty, unit, name) {
+    const u = (unit || "").toLowerCase().trim();
+    if (u && MEASURE_UNITS.has(u)) return `${qty} ${u} ${name}`;
+    return qty > 1 ? `${qty}× ${name}` : name;
+  }
   function entryRow(f) {
-    return `<div class="food-item"><span class="fname">${f.qty > 1 ? f.qty + "× " : ""}${f.name}` +
+    return `<div class="food-item"><span class="fname">${fmtQty(f.qty, f.unit, f.name)}` +
       `${f.source === "memory" ? ' <span class="mem-tag">remembered</span>' : ""}</span>` +
       `<span class="fkcal">${f.calories} kcal · ${f.protein}p ${f.carbs}c ${f.fat}f</span>` +
       `<button class="food-x" data-id="${f.id}" title="Remove" aria-label="Remove">×</button></div>`;

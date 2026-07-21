@@ -281,6 +281,14 @@ const UNIT_ALIAS = { ounce: "oz", ounces: "oz", oz: "oz", each: "each", item: "e
   tsp: "tsp", teaspoon: "tsp", stalk: "stalk", pack: "pack", g: "g", gram: "g", grams: "g" };
 function normUnit(u) { const t = (u || "").toLowerCase().trim(); return UNIT_ALIAS[t] || t || null; }
 
+// Display: weight/volume amounts read as "10 oz turkey"; countable items as "2× banana".
+const MEASURE_UNITS = new Set(["oz", "ounce", "ounces", "g", "gram", "grams", "kg", "ml", "l", "liter", "litre", "cup", "cups", "tbsp", "tsp", "fl oz"]);
+function fmtQty(qty, unit, name) {
+  const u = (unit || "").toLowerCase().trim();
+  if (u && MEASURE_UNITS.has(u)) return `${qty} ${u} ${name}`;
+  return qty > 1 ? `${qty}× ${name}` : name;
+}
+
 /** Apply a parsed nutrition intent. removeMode "all" | "one" governs removals. */
 function applyNutrition(parsed, { removeMode = "one" } = {}) {
   const parts = [], data = {};
@@ -347,7 +355,7 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
 
     nutrition.logFood({ name, qty, unit, ...per,
       source, confidence: source === "memory" ? 0.95 : 0.4, dairy: !!f.maybe_dairy });
-    logged.push({ name, qty, calories: Math.round(per.calories * qty), fromMemory });
+    logged.push({ name, qty, unit, calories: Math.round(per.calories * qty), fromMemory });
     if (f.maybe_dairy) dairy.push(name);
     if (isUnknown) unknown.push(name);
   }
@@ -356,7 +364,7 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
 
   if (logged.length) {
     parts.push("Logged, sir — " + logged.map((l) =>
-      `${l.qty > 1 ? l.qty + "× " : ""}${l.name} (~${l.calories} kcal${l.fromMemory ? ", remembered" : ""})`).join(", ") + ".");
+      `${fmtQty(l.qty, l.unit, l.name)} (~${l.calories} kcal${l.fromMemory ? ", remembered" : ""})`).join(", ") + ".");
   }
   if (water > 0) parts.push(`+${water} oz water.`);
   if (logged.length || water > 0 || (data.removed && data.removed.length)) {
