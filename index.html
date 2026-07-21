@@ -857,21 +857,24 @@ body {
 .vgrab {
   display: none;                 /* only shown inside the phone media queries */
   align-items: center; justify-content: center;
-  height: 18px; flex-shrink: 0; position: relative; z-index: 5;
+  height: 30px; flex-shrink: 0; position: relative; z-index: 5;   /* taller = easier to grab */
   background: var(--color-panel);
-  border-top: 2px solid var(--color-orange);            /* brighter + thicker line */
-  box-shadow: 0 0 10px rgba(255, 122, 0, 0.45);
+  border-top: 3px solid var(--color-orange);            /* thicker, brighter line */
+  box-shadow: 0 0 18px rgba(255, 122, 0, 0.7), inset 0 3px 10px rgba(255, 122, 0, 0.28);
   touch-action: none; cursor: grab;
   -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;   /* stop iOS's long-press menu/magnifier from hijacking the hold */
 }
 .vgrab::before {
-  content: ""; width: 46px; height: 4px; border-radius: 999px;
-  background: var(--color-orange); opacity: 0.95; transition: background 0.15s, width 0.15s;
+  content: ""; width: 60px; height: 6px; border-radius: 999px;
+  background: var(--color-orange); opacity: 1;
+  box-shadow: 0 0 12px rgba(255, 122, 0, 0.95);
+  transition: background 0.15s, width 0.15s, box-shadow 0.15s;
 }
 .vgrab.holding { border-top-color: #ffce7a; }           /* while you're holding to arm */
 .vgrab.holding::before { background: #ffce7a; }
-.vgrab.armed { border-top-color: #ff3b30; box-shadow: 0 0 16px rgba(255, 59, 48, 0.75); cursor: grabbing; } /* RED = movable */
-.vgrab.armed::before { background: #ff3b30; width: 62px; }
+.vgrab.armed { border-top-color: #ff3b30; box-shadow: 0 0 22px rgba(255, 59, 48, 0.85), inset 0 3px 10px rgba(255, 59, 48, 0.3); cursor: grabbing; } /* RED = movable */
+.vgrab.armed::before { background: #ff3b30; width: 78px; box-shadow: 0 0 14px rgba(255, 59, 48, 0.95); }
 
 /* --- scrollbar styling (orange-tinted) --- */
 ::-webkit-scrollbar { width: 8px; }
@@ -2608,7 +2611,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     if (!topEl || !handleEl) return;
     const media = window.matchMedia(mq);
     const container = () => topEl.parentElement;
-    let holdTimer = null, armed = false, startY = 0;
+    let holdTimer = null, armed = false, dragged = false, startY = 0, lastUp = 0;
 
     function setHeight(px) {
       const box = container().getBoundingClientRect();
@@ -2634,32 +2637,42 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       const h = topEl.getBoundingClientRect().height;
       try { localStorage.setItem(storageKey, (h / box.height).toFixed(4)); } catch (e) {}
     }
-    function disarm() { armed = false; handleEl.classList.remove("armed", "holding"); }
-
+    // ARM the bar two ways (whichever feels natural): press-and-HOLD ~1s, OR DOUBLE-TAP it.
+    // Armed = red. Then drag to resize; release saves. A tap while armed toggles it back off.
     handleEl.addEventListener("pointerdown", (e) => {
       if (!media.matches) return;
+      e.preventDefault();
       try { handleEl.setPointerCapture(e.pointerId); } catch (e2) {}
       startY = e.clientY;
+      dragged = false;
+      if (armed) return;                        // already armed (via double-tap) -> ready to drag
       handleEl.classList.add("holding");
       clearTimeout(holdTimer);
-      holdTimer = setTimeout(() => {                       // held long enough -> ARM (turn red)
+      holdTimer = setTimeout(() => {            // held ~1s -> ARM (turn red)
         armed = true; handleEl.classList.remove("holding"); handleEl.classList.add("armed");
       }, HOLD_MS);
     });
     handleEl.addEventListener("pointermove", (e) => {
-      if (!media.matches) return;
-      if (!armed) {
-        // moved before it armed -> treat as a scroll/miss, cancel the hold (no accidental resize)
-        if (Math.abs(e.clientY - startY) > 10) { clearTimeout(holdTimer); handleEl.classList.remove("holding"); }
-        return;
-      }
+      if (!media.matches || !armed) return;     // nothing until it's ARMED (red)
+      // NOTE: we deliberately do NOT cancel on small movement — a real finger always jitters
+      // while holding still, and cancelling on that made it impossible to arm.
       e.preventDefault();
+      dragged = true;
       setHeight(e.clientY - container().getBoundingClientRect().top);
     });
     function end() {
       clearTimeout(holdTimer);
-      if (armed) save();
-      disarm();
+      handleEl.classList.remove("holding");
+      if (armed) {                              // release while armed
+        if (dragged) save();                    // dragged -> save the new split
+        armed = false; dragged = false;
+        handleEl.classList.remove("armed");
+        return;
+      }
+      // quick tap while not armed -> a second tap within 350ms ARMS it (double-tap)
+      const now = Date.now();
+      if (now - lastUp < 350) { armed = true; handleEl.classList.add("armed"); lastUp = 0; }
+      else lastUp = now;
     }
     handleEl.addEventListener("pointerup", end);
     handleEl.addEventListener("pointercancel", end);
