@@ -164,5 +164,18 @@ console.log("\n[12] Edit a logged entry + learn it into food memory");
   ok("per-unit learned = total/qty (360/3 = 120)", mem2 && mem2.calories === 120);
 }
 
+console.log("\n[13] Water add / subtract / set (dashboard control)");
+{
+  nutrition.clearDay();
+  nutrition.logWater(100);
+  eq("drank 100 -> 100 oz", nutrition.dayTotals().water_oz, 100);
+  nutrition.logWater(-80);
+  eq("subtract 80 -> 20 oz", nutrition.dayTotals().water_oz, 20);
+  nutrition.logWater(-50);
+  eq("subtracting below zero clamps to 0", nutrition.dayTotals().water_oz, 0);
+  nutrition.setWater(64);
+  eq("set water to 64", nutrition.dayTotals().water_oz, 64);
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
