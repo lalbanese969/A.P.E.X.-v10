@@ -712,7 +712,7 @@ body {
 /* ============================================================================
    [STYLE:SIM]  —  fullscreen simulations takeover (honeycomb reveal + iframe)
    ============================================================================ */
-#sim-overlay { position: fixed; inset: 0; z-index: 300; display: none; background: var(--color-black); }
+#sim-overlay { position: fixed; inset: 0; z-index: 300; display: none; background: transparent; }
 #sim-overlay.on { display: block; }
 #sim-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--color-black); opacity: 0; }
 #sim-hex { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
@@ -727,7 +727,7 @@ body {
 /* ============================================================================
    [STYLE:BIG]  —  fullscreen "Workout APEX" takeover (/big): chat left, panels right
    ============================================================================ */
-#big-overlay { position: fixed; inset: 0; z-index: 300; display: none; background: var(--color-black); }
+#big-overlay { position: fixed; inset: 0; z-index: 300; display: none; background: transparent; }
 #big-overlay.on { display: block; }
 #big-hex { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
 #big-close {
@@ -2264,6 +2264,13 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     const q = (elapsed - GROW_MS - HOLD_MS) / CLEAR_MS;
     return Math.min(1, q * 1.3);                              // fade up as the center clears
   }
+  // Black backdrop fades IN while the hexes grow (so you see the old screen darken as it
+  // fills), then stays black for the hold + clear. Reverses automatically on close.
+  function backdropAlpha(elapsed) {
+    if (elapsed >= GROW_MS) return 1;
+    const p = elapsed / GROW_MS;
+    return p * p;                                             // ease-in: stays light, blacks out near the end
+  }
   function draw(elapsed) {
     ctx.clearRect(0, 0, W, H);
     for (let i = 0; i < hexes.length; i++) {
@@ -2271,6 +2278,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       if (lit > 0.02) drawHex(hexes[i].x, hexes[i].y, HEXR * (0.35 + 0.65 * lit), lit);
     }
     content.style.opacity = contentOpacity(elapsed);
+    overlay.style.background = "rgba(10,10,11," + backdropAlpha(elapsed) + ")";
   }
   function frame(ts) {
     if (!startTs) startTs = ts;
@@ -2294,6 +2302,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     computeThresholds();
     closeBtn.style.display = "none";
     content.style.opacity = 0;
+    overlay.style.background = "rgba(10,10,11,0)";   // start transparent -> the old screen shows through the grow
     opening = true; startTs = 0;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
