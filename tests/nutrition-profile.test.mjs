@@ -10,6 +10,8 @@ globalThis.localStorage = {
   getItem: (k) => (store.has(k) ? store.get(k) : null),
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
+  get length() { return store.size; },
+  key: (i) => [...store.keys()][i] ?? null,
 };
 
 const profile = await import("../js/profile.js");
@@ -175,6 +177,35 @@ console.log("\n[13] Water add / subtract / set (dashboard control)");
   eq("subtracting below zero clamps to 0", nutrition.dayTotals().water_oz, 0);
   nutrition.setWater(64);
   eq("set water to 64", nutrition.dayTotals().water_oz, 64);
+}
+
+console.log("\n[14] Workouts library + per-day tracking");
+{
+  const wo = await import("../js/workouts.js");
+  ok("library has multiple workouts", wo.library().length >= 6);
+  ok("no workout chosen by default", wo.getDay("2026-07-22").workoutId === null);
+  wo.setWorkout("push", "2026-07-22");
+  const day = wo.getDay("2026-07-22");
+  eq("chose push day", day.workoutId, "push");
+  eq("done array matches exercise count", day.done.length, wo.getWorkout("push").exercises.length);
+  wo.toggleExercise(0, "2026-07-22");
+  wo.toggleExercise(1, "2026-07-22");
+  const prog = wo.progress("2026-07-22");
+  ok("progress tracks 2 done", prog.done === 2 && prog.total === day.done.length);
+  wo.clearWorkout("2026-07-22");
+  ok("clear resets the day", wo.getDay("2026-07-22").workoutId === null);
+  // a different day is independent
+  wo.setWorkout("legs", "2026-07-21");
+  ok("days are independent", wo.getDay("2026-07-21").workoutId === "legs" && wo.getDay("2026-07-22").workoutId === null);
+}
+
+console.log("\n[15] Nutrition day is LOCAL + history listing");
+{
+  nutrition.clearDay();
+  // today key is a local YYYY-MM-DD (10 chars), not a UTC ISO slice
+  ok("todayStr is a local yyyy-mm-dd", /^\d{4}-\d{2}-\d{2}$/.test(nutrition.todayStr()));
+  nutrition.logFood({ name: "Test", qty: 1, calories: 100, protein: 5, carbs: 10, fat: 2 }, "2026-07-20");
+  ok("listDays includes a logged day", nutrition.listDays().includes("2026-07-20"));
 }
 
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);

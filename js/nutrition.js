@@ -22,7 +22,11 @@ const RECIPES_KEY = "nutrition.recipes";
 const dayKey = (d) => `nutrition.log.${d}`;
 
 const nowIso = () => new Date().toISOString();
-export const todayStr = () => new Date().toISOString().slice(0, 10);
+// LOCAL date (not UTC) so a "day" resets at the user's midnight, not UTC's.
+export const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 let _seq = 0;
 const uid = (p) => p + Date.now().toString(36) + (_seq++).toString(36);
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -346,6 +350,17 @@ export function learnFromEntry(entry) {
 export function setPendingAction(a) { setItem("nutrition.pendingAction", a); }
 export function getPendingAction() { return getItem("nutrition.pendingAction", null); }
 export function clearPendingAction() { removeItem("nutrition.pendingAction"); }
+
+/** All dates that have a logged day, newest first (for history browsing). */
+export function listDays() {
+  const prefix = "apex.nutrition.log.";
+  const days = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(prefix)) days.push(k.slice(prefix.length));
+  }
+  return days.sort().reverse();
+}
 
 /** Totals for a day: summed macros + water. */
 export function dayTotals(d = todayStr()) {

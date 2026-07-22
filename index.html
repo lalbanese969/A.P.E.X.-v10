@@ -828,6 +828,22 @@ body {
 .wo-progress .wp-txt { font-size: 12px; color: var(--color-text-dim); white-space: nowrap; }
 .wo-streak { margin-top: 12px; font-size: 12px; color: var(--color-orange-soft); }
 
+/* day history nav (‹ Today ›) */
+.day-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px; }
+.day-nav button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.03); color: var(--color-text); font-size: 17px; line-height: 1; cursor: pointer; }
+.day-nav button:hover:not(:disabled) { border-color: var(--line); color: var(--color-orange); }
+.day-nav button:disabled { opacity: 0.3; cursor: default; }
+.day-nav .day-label { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: var(--color-text); min-width: 96px; text-align: center; }
+
+/* workout picker + change */
+.wo-picker { display: flex; flex-direction: column; gap: 8px; }
+.wo-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line-soft); background: rgba(255,255,255,0.03); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.wo-pick:hover { border-color: var(--line); background: rgba(255,122,0,0.08); }
+.wo-pick .wp-name { font-size: 14px; font-weight: 700; color: var(--color-text); }
+.wo-pick .wp-focus { font-size: 11.5px; color: var(--color-text-dim); }
+.wo-change { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 8px; cursor: pointer; }
+.wo-change:hover { color: var(--color-orange); border-color: var(--line); }
+
 /* water jug — an orange "juice" level you fill toward your daily limit */
 .water-wrap { display: flex; align-items: center; gap: 20px; }
 .jug { position: relative; width: 92px; height: 150px; flex-shrink: 0; border: 2px solid var(--line); border-radius: 10px 10px 16px 16px; overflow: hidden; background: rgba(255, 255, 255, 0.03); }
@@ -1171,6 +1187,7 @@ import * as connectionsMod from "./js/connections.js";
 import * as settingsMod from "./js/settings.js";
 import * as profileMod from "./js/profile.js";
 import * as nutritionMod from "./js/nutrition.js";
+import * as workoutsMod from "./js/workouts.js";
 import { APEX_GREETINGS } from "./js/seedData.js";
 
 /* ============================================================================
@@ -2355,11 +2372,11 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
    [JS:BIG]  —  "Workout APEX" (/big). APEX's personal-trainer mode: a live COACH
    chat on the LEFT (pipeline.handleCoachPrompt — fitness-focused, skips the
    email/calendar action machinery) and tabbed panels on the RIGHT:
-     • Nutrition — macros vs. goal, a water jug (orange fill, logged in fl oz), food log
-     • Workout   — today's exercises, tap to check off, progress
-     • Metrics   — sleep / steps / HR / weight (Apple Watch sync is a LATER phase; sample data)
-   Tabs switch on click or ←/→ arrows. Today's nutrition/water/workout are tracked
-   in localStorage (apex.big.day) and reset each new day. Units: imperial (oz/lb).
+     • Nutrition — macros vs. goal, a water bottle (orange fill, fl oz), food log
+     • Workout   — pick a workout from the library, check off exercises, track progress
+   Tabs switch on click or ←/→ arrows. Nutrition (js/nutrition.js) + workouts
+   (js/workouts.js) are keyed by LOCAL day (reset at midnight); ‹ › browse history.
+   Units: imperial (oz/lb).
    Responsive: iPad = side-by-side; iPhone = stacked (panels on top, chat at bottom).
    ============================================================================ */
 (function () {
@@ -2372,48 +2389,18 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   window.APEX = window.APEX || {};
   window.APEX.closeBig = big.close;
 
-  /* ---------- today's workout (nutrition + water now live in js/nutrition.js;
-       calorie/macro targets come from js/profile.js). `day` below only holds
-       the workout check-offs. ---------- */
-  const WORKOUT = {
-    title: "Push Day",
-    ex: [
-      { name: "Bench Press",            sets: "4 × 8"  },
-      { name: "Overhead Press",         sets: "3 × 10" },
-      { name: "Incline Dumbbell Press", sets: "3 × 10" },
-      { name: "Cable Fly",              sets: "3 × 12" },
-      { name: "Triceps Pushdown",       sets: "3 × 15" },
-    ],
-  };
-
-  /* ---------- today's tracking, persisted to localStorage (resets each new day) ---------- */
-  const DAY_KEY = "apex.big.day";
+  /* ---------- state. Nutrition + water live in js/nutrition.js, workouts in
+       js/workouts.js, targets in js/profile.js — all keyed by LOCAL day (reset at
+       midnight). `viewDate` is which day the dashboard is showing (browse history). ---------- */
   const todayStr = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
-  const emptyDay = () => ({ date: todayStr(), foods: [], water: 0, done: WORKOUT.ex.map(() => false) });
-  const demoDay = () => ({
-    date: todayStr(), water: 24, done: WORKOUT.ex.map(() => false),
-    foods: [
-      { name: "Oatmeal + banana",    kcal: 320, p: 10, c: 60, f: 6  },
-      { name: "Chicken & rice bowl", kcal: 610, p: 45, c: 70, f: 14 },
-      { name: "Protein shake",       kcal: 180, p: 30, c: 8,  f: 3  },
-    ],
-  });
-  function loadDay() { try { return JSON.parse(localStorage.getItem(DAY_KEY)); } catch (e) { return null; } }
-  function saveDay() { try { localStorage.setItem(DAY_KEY, JSON.stringify(day)); } catch (e) {} }
-
-  let stored = loadDay(), day;
-  if (stored && stored.date === todayStr()) day = stored;   // same day → resume
-  else if (stored) day = emptyDay();                        // new day → fresh empty
-  else { day = demoDay(); saveDay(); }                      // first run ever → sample data
-  if (!Array.isArray(day.done) || day.done.length !== WORKOUT.ex.length) {
-    day.done = WORKOUT.ex.map((_, i) => !!(day.done && day.done[i]));
-  }
+  let viewDate = todayStr();     // day currently shown in the dashboard
+  let showPicker = false;        // workout tab: force the "pick a workout" view
 
   /* ---------- tabs ---------- */
-  const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "workout", label: "Workout" }, { id: "metrics", label: "Metrics" }];
+  const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "workout", label: "Workout" }];
   let activeTab = 0;
   let editingId = null;   // id of the logged food currently being edited (inline editor)
   const panels = document.getElementById("big-panels");
@@ -2464,16 +2451,40 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       </div>
     </div>`;
   }
-  function exRow(e, i) {
-    return `<div class="wo-ex ${day.done[i] ? "done" : ""}" data-i="${i}">
+  function exRow(e, i, done) {
+    return `<div class="wo-ex ${done ? "done" : ""}" data-i="${i}">
       <span class="wo-check"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
-      <span class="wo-name">${e.name}</span><span class="wo-sets">${e.sets}</span></div>`;
+      <span class="wo-name">${e.name}</span><span class="wo-sets">${e.sets} × ${e.reps}</span></div>`;
+  }
+  // day label + prev/next nav (shared by both tabs so you browse history consistently)
+  function dayLabel(d) {
+    if (d === todayStr()) return "Today";
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+    if (d === yStr) return "Yesterday";
+    return new Date(d + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  }
+  function dayNav() {
+    const isToday = viewDate === todayStr();
+    return `<div class="day-nav">
+      <button class="day-prev" title="Previous day">‹</button>
+      <span class="day-label">${dayLabel(viewDate)}</span>
+      <button class="day-next" title="Next day"${isToday ? " disabled" : ""}>›</button>
+    </div>`;
+  }
+  function shiftDay(delta) {
+    const d = new Date(viewDate + "T00:00:00");
+    d.setDate(d.getDate() + delta);
+    const s = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (s > todayStr()) return;                 // never go past today
+    viewDate = s; showPicker = false; editingId = null; render();
   }
 
   function nutritionHTML() {
-    const t = nutritionMod.dayTotals();
+    const isToday = viewDate === todayStr();
+    const t = nutritionMod.dayTotals(viewDate);
     const g = profileMod.dailyGoal();
-    const foods = nutritionMod.getDay().foods;
+    const foods = nutritionMod.getDay(viewDate).foods;
     const clamp = (v, goal) => Math.min(100, Math.round((v / goal) * 100));
     const wpct = clamp(t.water_oz, g.water_oz), calpct = clamp(t.calories, g.kcal);
     const M = [
@@ -2483,6 +2494,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       { label: "Fiber",   val: Math.round(t.fiber),   goal: g.fiber,   unit: "g", cls: "fb" },
     ];
     return `
+      ${dayNav()}
       <div class="bcard hero-row">
         <div class="hero-cal">
           <div class="bcard-title">Calories</div>
@@ -2500,39 +2512,35 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         ${M.map(macroRow).join("")}
       </div>
       <div class="bcard">
-        <div class="bcard-head"><span class="bcard-title">Today's food</span><span class="bcard-note">log by telling APEX →</span></div>
+        <div class="bcard-head"><span class="bcard-title">${isToday ? "Today's food" : "Food"}</span><span class="bcard-note">${isToday ? "log by telling APEX →" : ""}</span></div>
         <div id="food-list">${foods.length ? foods.map(entryRow).join("")
-          : `<div class="bcard-note">Nothing logged yet — just tell APEX in chat: “I ate 2 eggs and a bagel” or “drank 24 oz”.</div>`}</div>
-        <div style="text-align:right;"><button id="reset-day" class="reset-day-btn">Reset today</button></div>
+          : `<div class="bcard-note">${isToday ? "Nothing logged yet — just tell APEX in chat: “I ate 2 eggs and a bagel” or “drank 24 oz”." : "No food logged this day."}</div>`}</div>
+        ${foods.length ? `<div style="text-align:right;"><button id="reset-day" class="reset-day-btn">Reset ${isToday ? "today" : "this day"}</button></div>` : ""}
+      </div>`;
+  }
+  function workoutPickerHTML() {
+    return `
+      ${dayNav()}
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">Pick a workout</span><span class="bcard-note">tap one</span></div>
+        <div class="wo-picker">${workoutsMod.library().map((w) =>
+          `<button class="wo-pick" data-id="${w.id}"><span class="wp-name">${w.name}</span><span class="wp-focus">${w.focus} · ${w.exercises.length} exercises</span></button>`).join("")}</div>
       </div>`;
   }
   function workoutHTML() {
-    const done = day.done.filter(Boolean).length;
-    const woPct = Math.round((done / WORKOUT.ex.length) * 100);
+    const wday = workoutsMod.getDay(viewDate);
+    if (!wday.workoutId || showPicker) return workoutPickerHTML();
+    const w = workoutsMod.getWorkout(wday.workoutId);
+    const prog = workoutsMod.progress(viewDate);
     return `
+      ${dayNav()}
       <div class="bcard">
-        <div class="bcard-head"><span class="bcard-title">Today · ${WORKOUT.title}</span><span class="bcard-note">tap to check off</span></div>
-        <div id="wo-list">${WORKOUT.ex.map(exRow).join("")}</div>
+        <div class="bcard-head"><span class="bcard-title">${w.name}</span><button class="wo-change">change</button></div>
+        <div class="bcard-note" style="margin-bottom:10px;">${w.focus} · tap to check off</div>
+        <div id="wo-list">${w.exercises.map((e, i) => exRow(e, i, wday.done[i])).join("")}</div>
         <div class="wo-progress">
-          <div class="wp-bar"><div class="wp-fill" style="width:${woPct}%"></div></div>
-          <span class="wp-txt">${done}/${WORKOUT.ex.length} done</span>
-        </div>
-        <div class="wo-streak">Streak: 5 days — keep it up, sir.</div>
-      </div>`;
-  }
-  function metricsHTML() {
-    const stats = [
-      { label: "Sleep last night", value: `7h 32<small>m</small>` },
-      { label: "Steps today",      value: `8,410` },
-      { label: "Resting HR",       value: `58<small> bpm</small>` },
-      { label: "Weight",           value: `182<small> lb</small>` },
-    ];
-    return `
-      <div class="bcard">
-        <div class="bcard-head"><span class="bcard-title">Health Metrics</span><span class="bcard-note">sample data</span></div>
-        <div class="metric-grid">${stats.map((s) => `<div class="metric"><div class="m-label">${s.label}</div><div class="m-value">${s.value}</div></div>`).join("")}</div>
-        <div class="watch-note" style="margin-top:14px;"><b>Apple Watch sync — coming later.</b> These are sample values for now. Once it's wired up, APEX will pull your real sleep, steps, heart rate and weight so it can coach around how you actually recovered.
-          <button class="watch-btn" disabled>Connect Apple Watch (coming soon)</button>
+          <div class="wp-bar"><div class="wp-fill" style="width:${prog.pct}%"></div></div>
+          <span class="wp-txt">${prog.done}/${prog.total} done</span>
         </div>
       </div>`;
   }
@@ -2540,26 +2548,27 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   function render() {
     const bar = `<div class="big-tabs">${TABS.map((t, i) =>
       `<button class="big-tab ${i === activeTab ? "active" : ""}" data-tab="${i}">${t.label}</button>`).join("")}</div>`;
-    const body = TABS[activeTab].id === "nutrition" ? nutritionHTML()
-               : TABS[activeTab].id === "workout"   ? workoutHTML()
-               : metricsHTML();
+    const body = TABS[activeTab].id === "nutrition" ? nutritionHTML() : workoutHTML();
     panels.innerHTML = bar + `<div class="big-tabbody">${body}</div>`;
     wire();
   }
   function wire() {
     panels.querySelectorAll(".big-tab").forEach((b) =>
       b.addEventListener("click", () => { activeTab = +b.dataset.tab; render(); }));
-    // nutrition + water are logged by talking to APEX (see the coach chat send()), not buttons.
+    // day history nav (shared by both tabs)
+    const prev = panels.querySelector(".day-prev"), next = panels.querySelector(".day-next");
+    if (prev) prev.addEventListener("click", () => shiftDay(-1));
+    if (next) next.addEventListener("click", () => shiftDay(1));
+
+    // --- nutrition (logged by talking to APEX; these buttons manage the viewed day) ---
     const rd = document.getElementById("reset-day");
     if (rd) rd.addEventListener("click", () => {
-      if (confirm("Clear today's food & water log? (your saved foods and code words are kept)")) {
-        nutritionMod.clearDay(); render();
+      if (confirm("Clear this day's food & water log? (your saved foods and code words are kept)")) {
+        nutritionMod.clearDay(viewDate); render();
       }
     });
-    // × on a logged item removes just that entry
     panels.querySelectorAll(".food-x").forEach((b) =>
-      b.addEventListener("click", () => { nutritionMod.removeFoodEntry(b.dataset.id); render(); }));
-    // ✎ opens the inline editor for that item
+      b.addEventListener("click", () => { nutritionMod.removeFoodEntry(b.dataset.id, viewDate); render(); }));
     panels.querySelectorAll(".food-edit").forEach((b) =>
       b.addEventListener("click", () => { editingId = b.dataset.id; render(); }));
     panels.querySelectorAll(".fe-cancel").forEach((b) =>
@@ -2576,12 +2585,18 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
           carbs: parseFloat(g(".fe-cc").value) || 0,
           fat: parseFloat(g(".fe-ff").value) || 0,
         };
-        const updated = nutritionMod.updateFoodEntry(b.dataset.id, patch);
+        const updated = nutritionMod.updateFoodEntry(b.dataset.id, patch, viewDate);
         if (updated && g(".fe-learn-cb").checked) nutritionMod.learnFromEntry(updated);   // teach the memory
         editingId = null; render();
       }));
+
+    // --- workout: pick one, check off exercises, or change ---
+    panels.querySelectorAll(".wo-pick").forEach((b) =>
+      b.addEventListener("click", () => { workoutsMod.setWorkout(b.dataset.id, viewDate); showPicker = false; render(); }));
+    const wc = panels.querySelector(".wo-change");
+    if (wc) wc.addEventListener("click", () => { showPicker = true; render(); });
     panels.querySelectorAll("#wo-list .wo-ex").forEach((el) =>
-      el.addEventListener("click", () => { const i = +el.dataset.i; day.done[i] = !day.done[i]; saveDay(); render(); }));
+      el.addEventListener("click", () => { workoutsMod.toggleExercise(+el.dataset.i, viewDate); render(); }));
   }
   render();
 
@@ -2617,8 +2632,8 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     try {
       const data = await pipelineMod.handleCoachPrompt(text);
       thinking.textContent = data.apex_response;
-      // If APEX just changed the food/water numbers, jump to Nutrition so the bars move.
-      if (typeof data.intent === "string" && data.intent.startsWith("nutrition")) activeTab = 0;
+      // If APEX just changed the food/water numbers, jump to Nutrition/today so the bars move.
+      if (typeof data.intent === "string" && data.intent.startsWith("nutrition")) { activeTab = 0; viewDate = todayStr(); }
       render();
       console.log("[A.P.E.X./coach]", { intent: data.intent, ai: data.ai_meta });
     } catch (err) {
@@ -2635,6 +2650,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       greeted = true;
       addMessage("Trainer mode, sir. Tell me what you ate and I'll estimate it, log your water, or program your session — let's get you fit.", "apex");
     }
+    viewDate = todayStr(); showPicker = false;   // always open on today
     render();   // refresh the dashboard from the latest profile/nutrition data every open
     big.open();
     if (window.APEX.applyBigSplit) window.APEX.applyBigSplit();   // restore saved iPhone split
