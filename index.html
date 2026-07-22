@@ -1234,6 +1234,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
   let hexes = [];   // static hex centers, computed once per resize
   let forms = [];   // moving light-forms (each = a bending streak of nodes)
   let W = 0, H = 0;
+  let glowEnabled = true;   // takeovers switch this off so the bg hexes stop glowing during the animation
 
   /* Build the static hex grid that fills the panel */
   function buildGrid() {
@@ -1439,7 +1440,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 
     // 4) draw every hex, lit by the forms near it
     for (const h of hexes) {
-      drawHex(h.x, h.y, CONFIG.hexRadius, glowAt(h.x, h.y));
+      drawHex(h.x, h.y, CONFIG.hexRadius, glowEnabled ? glowAt(h.x, h.y) : 0);
     }
 
     requestAnimationFrame(frame);
@@ -1485,6 +1486,8 @@ import { APEX_GREETINGS } from "./js/seedData.js";
     if (!seeds.length) seeds.push({ x: rect.left + W / 2, y: rect.top + H / 2 });
     return seeds;
   };
+  // Takeovers call this to stop/restart the background hexes glowing during their animation.
+  window.APEX.setHoneycombGlow = function (on) { glowEnabled = !!on; };
 })();
 
 
@@ -2291,7 +2294,10 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     else {
       raf = null; startTs = 0;
       if (opening) { content.style.opacity = 1; closeBtn.style.display = "flex"; }
-      else { overlay.classList.remove("on"); ctx.clearRect(0, 0, W, H); }
+      else {
+        overlay.classList.remove("on"); ctx.clearRect(0, 0, W, H);
+        if (window.APEX && window.APEX.setHoneycombGlow) window.APEX.setHoneycombGlow(true);  // restore bg glow
+      }
     }
   }
 
@@ -2300,7 +2306,8 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     if (!firstOpened) { firstOpened = true; if (onFirstOpen) onFirstOpen(); }
     overlay.classList.add("on");
     build();
-    computeThresholds();
+    computeThresholds();   // captures the live blob seeds while it's still glowing...
+    if (window.APEX && window.APEX.setHoneycombGlow) window.APEX.setHoneycombGlow(false);  // ...then stop the bg glow
     closeBtn.style.display = "none";
     content.style.opacity = 0;
     overlay.style.background = "rgba(10,10,11,0)";   // start transparent -> the old screen shows through the grow
