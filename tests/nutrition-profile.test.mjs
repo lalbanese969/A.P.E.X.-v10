@@ -197,6 +197,19 @@ console.log("\n[14] Workouts library + per-day tracking");
   // a different day is independent
   wo.setWorkout("legs", "2026-07-21");
   ok("days are independent", wo.getDay("2026-07-21").workoutId === "legs" && wo.getDay("2026-07-22").workoutId === null);
+
+  // per-set logging + history
+  wo.setWorkout("push", "2026-07-19");
+  wo.logSet("Bench Press", 135, 8, "2026-07-19");
+  wo.logSet("Bench Press", 135, 8, "2026-07-19");
+  eq("2 sets logged for Bench on the 19th", wo.getSets("Bench Press", "2026-07-19").length, 2);
+  wo.setWorkout("push", "2026-07-23");
+  wo.logSet("Bench Press", 145, 6, "2026-07-23");
+  const last = wo.lastSession("Bench Press", "2026-07-23");
+  ok("lastSession finds the prior day (19th)", last && last.date === "2026-07-19" && last.sets.length === 2);
+  wo.removeSet("Bench Press", 0, "2026-07-23");
+  eq("removeSet drops a set", wo.getSets("Bench Press", "2026-07-23").length, 0);
+  ok("logging a set can mark done via setDone", (wo.setDone(0, true, "2026-07-23"), wo.getDay("2026-07-23").done[0] === true));
 }
 
 console.log("\n[15] Nutrition day is LOCAL + history listing");

@@ -75,15 +75,21 @@ const KEY = (d) => `workout.day.${d}`;
 export function library() { return WORKOUT_LIBRARY; }
 export function getWorkout(id) { return WORKOUT_LIBRARY.find((w) => w.id === id) || null; }
 
-export function getDay(d = todayStr()) { return getItem(KEY(d), { date: d, workoutId: null, done: [] }); }
+export function getDay(d = todayStr()) {
+  const day = getItem(KEY(d), { date: d, workoutId: null, done: [], sets: {} });
+  if (!Array.isArray(day.done)) day.done = [];
+  if (!day.sets || typeof day.sets !== "object") day.sets = {};   // sets keyed by exercise NAME
+  return day;
+}
 function save(day) { setItem(KEY(day.date), day); }
 
-/** Choose today's workout (resets the check-offs to match it). */
+/** Choose today's workout (resets the check-offs + logged sets to match it). */
 export function setWorkout(id, d = todayStr()) {
   const w = getWorkout(id);
   const day = getDay(d);
   day.workoutId = id;
   day.done = (w ? w.exercises : []).map(() => false);
+  day.sets = {};
   save(day);
   return day;
 }
@@ -93,6 +99,51 @@ export function toggleExercise(i, d = todayStr()) {
   day.done[i] = !day.done[i];
   save(day);
   return day;
+}
+export function setDone(i, val, d = todayStr()) {
+  const day = getDay(d);
+  while (day.done.length <= i) day.done.push(false);
+  day.done[i] = !!val;
+  save(day);
+  return day;
+}
+
+/* ---- per-set logging (weight × reps), keyed by exercise name ---- */
+export function getSets(name, d = todayStr()) { return getDay(d).sets[name] || []; }
+export function logSet(name, weight, reps, d = todayStr()) {
+  const day = getDay(d);
+  (day.sets[name] = day.sets[name] || []).push({ w: Math.max(0, +weight || 0), r: Math.max(0, Math.round(+reps || 0)) });
+  save(day);
+  return day.sets[name];
+}
+export function removeSet(name, i, d = todayStr()) {
+  const day = getDay(d);
+  if (day.sets[name]) {
+    day.sets[name].splice(i, 1);
+    if (!day.sets[name].length) delete day.sets[name];
+    save(day);
+  }
+  return day;
+}
+
+/* ---- history across days ---- */
+export function allDays() {
+  const prefix = "apex.workout.day.";
+  const days = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(prefix)) days.push(k.slice(prefix.length));
+  }
+  return days.sort().reverse();
+}
+/** The most recent PRIOR day that logged sets for this exercise -> {date, sets} or null. */
+export function lastSession(name, before = todayStr()) {
+  for (const d of allDays()) {
+    if (d >= before) continue;
+    const s = getSets(name, d);
+    if (s.length) return { date: d, sets: s };
+  }
+  return null;
 }
 export function clearWorkout(d = todayStr()) {
   const day = getDay(d);
