@@ -867,10 +867,16 @@ body {
 .brain-header { flex-shrink: 0; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 118px 0 22px; border-bottom: 1px solid var(--line); }
 
 .brain-scroll { flex: 1; overflow-y: auto; padding: 26px 20px 40px; }
-.brain-map { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: stretch; }
+.brain-map { max-width: 820px; margin: 0 auto; position: relative; display: flex; flex-direction: column; align-items: stretch; }
 
-/* one layer of the flow (a labelled row of nodes) */
-.brain-layer { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* SVG layer that draws the flow-chart connector lines BEHIND the boxes */
+#brain-svg { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.brain-edge { fill: none; stroke: rgba(255, 122, 0, 0.42); stroke-width: 1.6; filter: drop-shadow(0 0 3px rgba(255, 122, 0, 0.35)); }
+.brain-edge-dot { fill: var(--color-orange); filter: drop-shadow(0 0 3px rgba(255, 122, 0, 0.7)); }
+
+/* one layer of the flow (a labelled row of nodes) — sits ABOVE the connector lines */
+.brain-layer { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.brain-layer + .brain-layer { margin-top: 46px; }   /* room for the connector lines */
 .brain-layer-title { font-size: 10.5px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-orange-soft); }
 .brain-nodes { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }
 
@@ -2745,44 +2751,55 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
    Each layer = { title, nodes:[{ t:title, d:description, f:file/label }] }.
    ============================================================================ */
 (function () {
+  // Each node has an `id`; `edges` are [fromId, toId] pairs drawn as connector lines.
   const BRAIN = {
     layers: [
       { title: "You", nodes: [
-        { t: "You (sir)", d: "Type or talk to A.P.E.X. Everything starts here.", f: "" },
+        { id: "you", t: "You (sir)", d: "Type or talk to A.P.E.X. Everything starts here.", f: "" },
       ] },
       { title: "Interface — index.html", nodes: [
-        { t: "Main Chat", d: "The general assistant: questions, calendar, email.", f: "[JS:CHAT]" },
-        { t: "/big · Workout APEX", d: "Trainer mode: log food & water, pick workouts, coach chat.", f: "[JS:BIG]" },
-        { t: "/open sim", d: "The Simulations lab (embedded site).", f: "[JS:SIM]" },
-        { t: "/brain", d: "This flow-map you're looking at.", f: "[JS:BRAIN]" },
+        { id: "mainchat", t: "Main Chat", d: "The general assistant: questions, calendar, email.", f: "[JS:CHAT]" },
+        { id: "big", t: "/big · Workout APEX", d: "Trainer mode: log food & water, pick workouts, coach chat.", f: "[JS:BIG]" },
+        { id: "sim", t: "/open sim", d: "The Simulations lab (embedded site).", f: "[JS:SIM]" },
+        { id: "brain", t: "/brain", d: "This flow-chart you're looking at.", f: "[JS:BRAIN]" },
       ] },
       { title: "Pipeline — the router (js/pipeline.js)", nodes: [
-        { t: "handlePrompt", d: "Main chat: picks an intent → calendar / email / draft / plain chat.", f: "pipeline.js" },
-        { t: "handleCoachPrompt", d: "Trainer chat: nutrition logging + fitness coaching (skips email/calendar).", f: "pipeline.js" },
+        { id: "handle", t: "handlePrompt", d: "Main chat: picks an intent → calendar / email / draft / plain chat.", f: "pipeline.js" },
+        { id: "coach", t: "handleCoachPrompt", d: "Trainer chat: nutrition logging + fitness coaching (skips email/calendar).", f: "pipeline.js" },
       ] },
       { title: "Thinking", nodes: [
-        { t: "Memory resolver", d: "Finds the few relevant memory cards → builds a small packet for the AI.", f: "memory.js" },
-        { t: "Nutrition parser", d: "Turns 'I ate 10 oz turkey' into food / water / alias / correction / remove actions.", f: "pipeline.js" },
-        { t: "AI Center", d: "Groq (primary) → Gemini (fallback), called straight from the browser.", f: "aiCenter.js" },
+        { id: "resolver", t: "Memory resolver", d: "Finds the few relevant memory cards → a small packet for the AI.", f: "memory.js" },
+        { id: "nutri", t: "Nutrition parser", d: "'I ate 10 oz turkey' → food / water / alias / correction / remove actions.", f: "pipeline.js" },
+        { id: "ai", t: "AI Center", d: "Groq (primary) → Gemini (fallback), straight from the browser.", f: "aiCenter.js" },
       ] },
       { title: "Memory & Data — kept on THIS device", nodes: [
-        { t: "Profile", d: "Durable facts, goals, the DAIRY allergy, calorie/macro targets, creatine.", f: "profile.js" },
-        { t: "Nutrition", d: "Food memory (with code words), the daily log, water, recipes — per local day.", f: "nutrition.js" },
-        { t: "Workouts", d: "The workout library + which workout you did each day.", f: "workouts.js" },
-        { t: "Memory (people/self)", d: "Catalog + resolver + silent background fact-learning.", f: "memory.js" },
-        { t: "Settings & Connections", d: "Your API keys, labelled accounts, mock email/calendar.", f: "settings.js · connections.js" },
+        { id: "profile", t: "Profile", d: "Facts, goals, the DAIRY allergy, calorie/macro targets, creatine.", f: "profile.js" },
+        { id: "nutrition", t: "Nutrition", d: "Food memory (code words), the daily log, water, recipes — per local day.", f: "nutrition.js" },
+        { id: "workouts", t: "Workouts", d: "The workout library + which workout you did each day.", f: "workouts.js" },
+        { id: "memory", t: "Memory (people/self)", d: "Catalog + resolver + silent background fact-learning.", f: "memory.js" },
+        { id: "settings", t: "Settings & Connections", d: "Your API keys, labelled accounts, mock email/calendar.", f: "settings.js" },
       ] },
       { title: "Storage — the foundation", nodes: [
-        { t: "Browser localStorage", d: "Every 'apex.*' key lives here, on this device only — nothing is uploaded except the prompts sent to the AI.", f: "storage.js" },
+        { id: "storage", t: "Browser localStorage", d: "Every 'apex.*' key, on this device only — nothing uploaded except prompts to the AI.", f: "storage.js" },
       ] },
     ],
-    legend: "Data flows DOWN (you → interface → pipeline → thinking → memory → storage); the reply flows back UP to the chat. When a feature is added, this map is updated in [JS:BRAIN]'s BRAIN constant so it always reflects reality.",
+    // the actual flow: which box connects to which
+    edges: [
+      ["you", "mainchat"], ["you", "big"], ["you", "sim"], ["you", "brain"],
+      ["mainchat", "handle"], ["big", "coach"], ["big", "workouts"],
+      ["handle", "resolver"], ["handle", "ai"],
+      ["coach", "nutri"], ["coach", "resolver"], ["coach", "ai"],
+      ["nutri", "nutrition"], ["nutri", "profile"],
+      ["resolver", "memory"], ["resolver", "profile"],
+      ["ai", "settings"],
+      ["profile", "storage"], ["nutrition", "storage"], ["workouts", "storage"], ["memory", "storage"], ["settings", "storage"],
+    ],
+    legend: "Data flows DOWN the connectors (you → interface → pipeline → thinking → memory → storage); the reply flows back UP to the chat. When a feature is added, this map is updated in [JS:BRAIN]'s BRAIN object (nodes + edges) so it always reflects reality.",
   };
 
-  // build the map HTML from BRAIN (re-run on every open so it's always current)
+  // build the boxes from BRAIN, then draw the connector lines between them
   function renderBrain() {
-    const arrow = `<div class="brain-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg></div>`;
-    const nodeHTML = (n) => `<div class="brain-node">
+    const nodeHTML = (n) => `<div class="brain-node" data-id="${n.id}">
         <div class="bn-head"><span class="bn-hex"></span><span class="bn-title">${n.t}</span></div>
         <div class="bn-desc">${n.d}</div>${n.f ? `<div class="bn-file">${n.f}</div>` : ""}
       </div>`;
@@ -2791,7 +2808,36 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         <div class="brain-nodes">${L.nodes.map(nodeHTML).join("")}</div>
       </div>`;
     document.getElementById("brain-map").innerHTML =
-      BRAIN.layers.map(layerHTML).join(arrow) + `<div class="brain-legend">${BRAIN.legend}</div>`;
+      `<svg id="brain-svg" xmlns="http://www.w3.org/2000/svg"></svg>` +
+      BRAIN.layers.map(layerHTML).join("") +
+      `<div class="brain-legend">${BRAIN.legend}</div>`;
+    requestAnimationFrame(drawConnectors);   // measure boxes then draw lines
+  }
+
+  // draw a smooth connector from the bottom-center of each `from` box to the
+  // top-center of its `to` box (coords are relative to the scrolling map).
+  function drawConnectors() {
+    const map = document.getElementById("brain-map");
+    const svg = document.getElementById("brain-svg");
+    if (!map || !svg) return;
+    const m = map.getBoundingClientRect();
+    const W = map.clientWidth, H = map.clientHeight;
+    svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const pos = (id) => {
+      const el = map.querySelector(`.brain-node[data-id="${id}"]`);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { cx: r.left - m.left + r.width / 2, top: r.top - m.top, bottom: r.top - m.top + r.height };
+    };
+    let out = "";
+    for (const [a, b] of BRAIN.edges) {
+      const A = pos(a), B = pos(b);
+      if (!A || !B) continue;
+      const x1 = A.cx, y1 = A.bottom, x2 = B.cx, y2 = B.top, my = (y1 + y2) / 2;
+      out += `<path d="M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}" class="brain-edge"/>` +
+             `<circle cx="${x2}" cy="${y2}" r="2.6" class="brain-edge-dot"/>`;
+    }
+    svg.innerHTML = out;
   }
 
   // reuse the shared honeycomb takeover (same reveal as /big and /open sim)
@@ -2803,7 +2849,11 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   });
   window.APEX = window.APEX || {};
   window.APEX.closeBrain = brain.close;
-  window.APEX.openBrain = function () { renderBrain(); brain.open(); };
+  window.APEX.openBrain = function () { renderBrain(); brain.open(); setTimeout(drawConnectors, 140); };
+  // keep the connectors aligned to the boxes on resize/rotate while it's open
+  window.addEventListener("resize", () => {
+    if (document.getElementById("brain-overlay").classList.contains("on")) drawConnectors();
+  });
 })();
 
 
