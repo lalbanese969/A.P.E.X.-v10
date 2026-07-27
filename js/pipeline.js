@@ -187,7 +187,10 @@ function looksNutrition(p) {
 function hasConsumptionSignal(p) {
   const t = (p || "").toLowerCase();
   return /\b(ate|eaten|eating|had|have (a|some|the|my)|having|drank|drinking|finished|consumed|snacked|grabbed|made myself|log(ged)?|add(ed|ing)?|track)\b/.test(t)
-    || /\bfor (breakfast|lunch|dinner)\b|\bas a snack\b/.test(t);
+    || /\bfor (breakfast|lunch|dinner)\b|\bas a snack\b/.test(t)
+    // saved-meal / serving phrasings that carry no "ate/had" verb ("2 servings of my fried rice", "my normal sandwich")
+    || /\bservings? of\b/.test(t)
+    || /\bmy (normal|usual|regular|healthy|go.?to|favou?rite|breakfast|lunch|dinner|meal|shake|smoothie)\b/.test(t);
 }
 // Is the message a question / hypothetical (asking about a food, not logging it)?
 function isQuestionish(p) {
