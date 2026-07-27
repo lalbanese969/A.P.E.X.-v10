@@ -234,7 +234,7 @@ async function parseNutrition(prompt) {
   const sys =
     "You process a NUTRITION message for a food tracker and reply ONLY with JSON: " +
     "{\"foods\":[{\"name\":str,\"qty\":num,\"unit\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num,\"maybe_dairy\":bool}]," +
-    "\"water_oz\":num,\"remove\":[str],\"alias\":{\"word\":str,\"means\":str}|null," +
+    "\"water_oz\":num,\"water_set\":num|null,\"remove\":[str],\"alias\":{\"word\":str,\"means\":str}|null," +
     "\"correction\":{\"food\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num}|null," +
     "\"note\":str,\"confident\":bool,\"question\":str}.\n" +
     "RULES:\n" +
@@ -248,14 +248,17 @@ async function parseNutrition(prompt) {
     "- Give your BEST realistic estimate for every food using common USDA-style values. ALWAYS non-zero — NEVER " +
     "0 protein for meat/eggs/fish/beans, and never refuse to estimate.\n" +
     "- For MEAT & FISH ALWAYS use unit 'oz' with qty = number of ounces (convert items: 1 chicken breast≈6oz, " +
-    "1 pork chop≈4oz, 1 steak≈8oz, 3 slices bacon≈1.5oz). ASSUME LEAN cuts with MINIMAL fat ('turkey'/'steak'/" +
-    "'beef'/'ham'/'chicken' = lean; e.g. lean turkey ≈ 38 kcal & 9g protein per oz) UNLESS the user names a fattier " +
-    "cut (ribeye, 80/20). Assume COOKED weight unless told raw. Round to whole numbers.\n" +
+    "1 pork chop≈4oz, 1 steak≈8oz, 3 slices bacon≈1.5oz). Assume COOKED weight unless told raw. Round to whole numbers.\n" +
+    "- MEAT FATTINESS — if the cut is NOT stated AND lean-vs-fatty would swing the calories a lot (e.g. bare 'steak', " +
+    "'beef', 'burger', 'pork'), DON'T silently guess: set confident:false and ask (question:'Was that a lean or fattier " +
+    "cut of steak?'). Only assume lean without asking when it barely matters or the food is inherently lean (skinless " +
+    "chicken breast, turkey, white fish, ham ≈ 38 kcal & 9g protein per oz). If the user names the cut (ribeye, 80/20, " +
+    "sirloin), just use it — no need to ask.\n" +
     "- SAVED MEALS: if the user references one of their own saved meals ('my normal sandwich', 'my healthy " +
     "fried rice', '2 servings of my fried rice'), keep the meal's name as they said it (drop a leading 'my'/'normal'), " +
     "set unit:'serving' and qty = number of servings (default 1) — the app looks up its saved nutrition, so the macros " +
     "don't matter. Any EXTRA item they add ('with an extra egg') is just another entry in foods.\n" +
-    (mealList ? "  THE USER'S SAVED MEALS: " + mealList + ". If their wording matches one of these, use that meal's exact name with unit 'serving'.\n" : "") +
+    (mealList ? "  THE USER'S SAVED MEALS: " + mealList + ". If their wording clearly matches one of these (its name or a listed alias), use that meal's exact name with unit 'serving'. Do NOT match a saved meal just because it shares ingredients — 'rice and chicken' is NOT 'my fried rice' unless they say so.\n" : "") +
     "- water_oz = SIGNED change to water in fl oz: POSITIVE when they drank/add ('drank 32 oz' -> 32, " +
     "'a bottle'≈20, 'a glass'≈8, '1 L'≈34), NEGATIVE to subtract/remove ('subtract 80 oz from water' -> -80, " +
     "'take 20 oz off my water' -> -20). water_set = set the total to an absolute value ('set water to 50' -> 50), else null.\n" +
@@ -264,8 +267,10 @@ async function parseNutrition(prompt) {
     "- correction = the REAL macros of a food ('belvita is 230 cal'): per-unit; food=its name or 'it'.\n" +
     "- confident: set FALSE and put a short clarifying question in `question` if truly AMBIGUOUS (unclear whether they " +
     "ate it or are asking, a vague food, an odd quantity). When sure, confident:true and question:\"\".\n" +
-    "- Use [] / 0 / null / \"\" for anything absent. maybe_dairy=true if it usually has milk/cheese/butter/cream/whey/casein " +
-    "(user has a DAIRY allergy: " + allergens.slice(0, 8).join(", ") + ").\n" +
+    "- Use [] / 0 / null / \"\" for anything absent. maybe_dairy means 'POSSIBLY has dairy' (not 'confirmed unsafe'): " +
+    "set it true if the food usually OR might contain milk/cheese/butter/cream/whey/casein — including uncertain " +
+    "restaurant bread/baked goods & packaged foods that often hide milk. The user has a SEVERE DAIRY allergy (" +
+    allergens.slice(0, 8).join(", ") + "), so when unsure, flag it true.\n" +
     "Examples: 'I had 6 oz chicken and a cup of rice' -> foods:[{name:'chicken',qty:6,unit:'oz',calories:47,protein:9,carbs:0,fat:1}," +
     "{name:'rice',qty:1,unit:'cup',calories:205,protein:4,carbs:45,fat:0}]. " +
     "'how many calories in a chocolate belvita?' -> foods:[], confident:true.";
@@ -436,13 +441,31 @@ async function handleNutrition(prompt) {
   let pending = nutrition.getPendingAction();
   if (pending && pending.ts && Date.now() - pending.ts > 300000) { nutrition.clearPendingAction(); pending = null; }
   if (pending) {
-    const mode = removeModeFrom(prompt);
     if (isNegative(prompt)) { nutrition.clearPendingAction(); return { intent: "nutrition_cancel", response: "Okay, sir — left it as it was.", data: {}, ai_meta: { provider: null, model: null } }; }
-    if (isAffirmative(prompt) || mode) {
+    if (pending.kind === "clarify" && pending.origPrompt) {
+      // APEX asked a clarifying question (e.g. "lean or fatty cut?"). Their reply is the ANSWER,
+      // so merge it back with the ORIGINAL message and re-parse — otherwise "a ribeye" loses the
+      // "8 oz steak" it belonged to.
       nutrition.clearPendingAction();
-      return applyNutrition(pending.parsed, { removeMode: mode || pending.defaultRemoveMode || "one" });
+      const merged = pending.origPrompt + ". " + prompt;
+      const reparsed = await parseNutrition(merged);
+      if (reparsed && !reparsed.empty) {
+        if (!reparsed.confident && reparsed.question) {   // still unsure -> ask again
+          nutrition.setPendingAction({ parsed: reparsed, origPrompt: merged, kind: "clarify", ts: Date.now() });
+          return { intent: "nutrition_confirm", response: reparsed.question, data: {}, ai_meta: reparsed.ai_meta };
+        }
+        return applyNutrition(reparsed, { removeMode: removeModeFrom(merged) || "one" });
+      }
+      // re-parse found nothing usable -> fall through and treat their message as a fresh one
+    } else {
+      // removal-ambiguity pending: only an explicit all/one/yes/no resolves it
+      const mode = removeModeFrom(prompt);
+      if (isAffirmative(prompt) || mode) {
+        nutrition.clearPendingAction();
+        return applyNutrition(pending.parsed, { removeMode: mode || pending.defaultRemoveMode || "one" });
+      }
+      nutrition.clearPendingAction();   // unrelated reply -> drop the question, parse the new message
     }
-    nutrition.clearPendingAction();   // unrelated reply -> drop the question, parse the new message
   }
 
   // 2) parse
@@ -463,9 +486,10 @@ async function handleNutrition(prompt) {
     }
   }
 
-  // 4) low confidence -> ASK before doing anything (so it's not jumpy)
+  // 4) low confidence -> ASK before doing anything (so it's not jumpy). Tag it "clarify" + keep the
+  //    original message so the user's answer can be merged back and re-parsed (see step 1).
   if (!parsed.confident && parsed.question) {
-    nutrition.setPendingAction({ parsed, defaultRemoveMode: "one", ts: Date.now() });
+    nutrition.setPendingAction({ parsed, origPrompt: prompt, kind: "clarify", defaultRemoveMode: "one", ts: Date.now() });
     return { intent: "nutrition_confirm", response: parsed.question, data: {}, ai_meta: parsed.ai_meta };
   }
 
