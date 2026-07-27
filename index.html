@@ -857,6 +857,42 @@ body {
 .wo-change { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 8px; cursor: pointer; }
 .wo-change:hover { color: var(--color-orange); border-color: var(--line); }
 
+/* ===== Meals tab (saved-meal / recipe diary) ===== */
+.meal-new { background: var(--color-orange); color: #160b00; border: none; font-family: inherit; font-weight: 700; font-size: 12px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.meal-new:hover { filter: brightness(1.1); }
+.meal-list { display: flex; flex-direction: column; gap: 8px; }
+.meal-item { display: block; width: 100%; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line-soft); background: rgba(255, 255, 255, 0.03); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.meal-item:hover { border-color: var(--line); background: rgba(255, 122, 0, 0.08); }
+.meal-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.meal-item .mi-name { font-size: 14px; font-weight: 700; color: var(--color-text); }
+.meal-item .mi-serv { font-size: 11px; color: var(--color-text-dim); white-space: nowrap; }
+.meal-item .mi-macros { font-size: 12px; color: var(--color-orange-soft); margin-top: 3px; }
+.meal-item .mi-per { color: var(--color-text-dim); }
+.meal-item .mi-aliases { font-size: 11px; color: var(--color-text-dim); margin-top: 4px; }
+/* meal editor */
+.meal-editor .me { width: 100%; background: rgba(22, 22, 25, 0.9); border: 1px solid var(--line-soft); color: var(--color-text); border-radius: 7px; padding: 8px 10px; font-family: inherit; font-size: 13px; outline: none; margin-bottom: 8px; }
+.meal-editor .me:focus { border-color: rgba(255, 122, 0, 0.5); }
+.me-serv-row { font-size: 13px; color: var(--color-text-dim); margin: 2px 0 12px; display: flex; align-items: center; gap: 7px; }
+.me-servings { width: 60px; margin: 0 !important; text-align: center; }
+.me-ings-head { font-size: 12px; font-weight: 700; color: var(--color-text); margin-bottom: 7px; }
+.me-ings-note { font-weight: 400; color: var(--color-text-dim); }
+.me-ings { display: flex; flex-direction: column; gap: 6px; }
+.me-ing { display: flex; gap: 5px; align-items: center; }
+.me-ing .mi-in-name { flex: 1 1 auto; min-width: 0; }
+.me-ing input { background: rgba(22, 22, 25, 0.9); border: 1px solid var(--line-soft); color: var(--color-text); border-radius: 6px; padding: 6px 7px; font-family: inherit; font-size: 12px; outline: none; }
+.me-ing input:focus { border-color: rgba(255, 122, 0, 0.5); }
+.me-ing .mi-in-cal { width: 52px; } .me-ing .mi-in-p, .me-ing .mi-in-c, .me-ing .mi-in-f { width: 40px; }
+.mi-in-x { background: transparent; border: none; color: var(--color-text-dim); font-size: 15px; cursor: pointer; padding: 0 3px; flex-shrink: 0; }
+.mi-in-x:hover { color: #ff6b6b; }
+.me-add-ing { margin-top: 8px; background: transparent; border: 1px dashed var(--line); color: var(--color-text-dim); font-family: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.me-add-ing:hover { color: var(--color-orange); }
+.me-per { margin-top: 14px; font-size: 13px; color: var(--color-text-dim); }
+.me-per b { color: var(--color-orange); }
+.me-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.me-save { background: var(--color-orange); color: #160b00; border: none; font-weight: 700; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.me-cancel { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.me-delete { background: transparent; border: 1px solid rgba(255,107,107,0.4); color: #ff6b6b; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-right: auto; }
+
 /* ============================================================================
    [STYLE:BRAIN]  —  the "/brain" flow-map takeover. Same overlay pattern as
    /big and /open sim (transparent overlay, honeycomb canvas on top, content that
@@ -2463,9 +2499,10 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   let showPicker = false;        // workout tab: force the "pick a workout" view
 
   /* ---------- tabs ---------- */
-  const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "workout", label: "Workout" }];
+  const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "meals", label: "Meals" }, { id: "workout", label: "Workout" }];
   let activeTab = 0;
-  let editingId = null;   // id of the logged food currently being edited (inline editor)
+  let editingId = null;      // id of the logged food currently being edited (inline editor)
+  let editingMeal = null;    // working copy of the saved-meal (recipe) being edited, or null
   const panels = document.getElementById("big-panels");
 
   function macroRow(m) {
@@ -2480,6 +2517,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   const MEASURE_UNITS = new Set(["oz", "ounce", "ounces", "g", "gram", "grams", "kg", "ml", "l", "liter", "litre", "cup", "cups", "tbsp", "tsp", "fl oz"]);
   function fmtQty(qty, unit, name) {
     const u = (unit || "").toLowerCase().trim();
+    if (u === "serving" || u === "servings") return `${qty} serving${qty === 1 ? "" : "s"} ${name}`;
     if (u && MEASURE_UNITS.has(u)) return `${qty} ${u} ${name}`;
     return qty > 1 ? `${qty}× ${name}` : name;
   }
@@ -2626,16 +2664,88 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       </div>`;
   }
 
+  /* ---------- MEALS tab: a food diary of saved meals/recipes you log by name ---------- */
+  function mealsHTML() {
+    if (editingMeal) return mealEditorHTML(editingMeal);
+    const list = nutritionMod.recipes();
+    const mealCard = (r) => {
+      const ps = nutritionMod.recipeTotals(r).perServing;
+      return `<button class="meal-item" data-id="${r.id}">
+        <div class="meal-item-top"><span class="mi-name">${r.name}</span><span class="mi-serv">${r.servings} serving${r.servings === 1 ? "" : "s"}</span></div>
+        <div class="mi-macros">${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}p ${Math.round(ps.carbs)}c ${Math.round(ps.fat)}f <span class="mi-per">per serving</span></div>
+        ${r.aliases && r.aliases.length ? `<div class="mi-aliases">say: ${r.aliases.join(", ")}</div>` : ""}
+      </button>`;
+    };
+    return `
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">My Meals</span><button class="meal-new">+ New meal</button></div>
+        <div class="bcard-note" style="margin-bottom:12px;">Save meals & recipes, then just tell APEX: “I had my normal sandwich”, “2 servings of my fried rice”, or “my sandwich with an extra egg”.</div>
+        <div class="meal-list">${list.length ? list.map(mealCard).join("") : `<div class="bcard-note">No meals yet — tap “+ New meal”.</div>`}</div>
+      </div>`;
+  }
+  function mealEditorHTML(r) {
+    const isNew = !nutritionMod.recipes().some((x) => x.id === r.id);
+    const ingRow = (ing, idx) => `<div class="me-ing" data-idx="${idx}">
+        <input class="mi-in-name" placeholder="ingredient" value="${escAttr(ing.name || "")}">
+        <input class="mi-in-cal" type="number" inputmode="numeric" placeholder="cal" value="${ing.calories || 0}">
+        <input class="mi-in-p" type="number" inputmode="numeric" placeholder="P" value="${ing.protein || 0}">
+        <input class="mi-in-c" type="number" inputmode="numeric" placeholder="C" value="${ing.carbs || 0}">
+        <input class="mi-in-f" type="number" inputmode="numeric" placeholder="F" value="${ing.fat || 0}">
+        <button class="mi-in-x" data-idx="${idx}" title="remove">×</button>
+      </div>`;
+    const ps = nutritionMod.recipeTotals(r).perServing;
+    return `
+      <div class="bcard meal-editor">
+        <div class="bcard-head"><span class="bcard-title">${isNew ? "New meal" : "Edit meal"}</span></div>
+        <input class="me me-name" placeholder="meal name (e.g. Healthy fried rice)" value="${escAttr(r.name)}">
+        <input class="me me-aliases" placeholder="code words, comma-separated (e.g. fried rice, my normal sandwich)" value="${escAttr((r.aliases || []).join(", "))}">
+        <div class="me-serv-row">makes <input class="me me-servings" type="number" inputmode="numeric" min="1" value="${r.servings || 1}"> serving(s)</div>
+        <div class="me-ings-head">Ingredients <span class="me-ings-note">— cal / P / C / F each</span></div>
+        <div class="me-ings">${(r.ingredients || []).map(ingRow).join("")}</div>
+        <button class="me-add-ing">+ ingredient</button>
+        <div class="me-per">Per serving: <b class="me-per-val">${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}p ${Math.round(ps.carbs)}c ${Math.round(ps.fat)}f</b></div>
+        <div class="me-actions">
+          ${isNew ? "" : `<button class="me-delete">Delete</button>`}
+          <button class="me-cancel">Cancel</button>
+          <button class="me-save">Save meal</button>
+        </div>
+      </div>`;
+  }
+  // read the editor DOM back into `editingMeal` (so add/remove-ingredient keeps typed values)
+  function gatherMealEditor() {
+    if (!editingMeal) return;
+    const q = (s) => panels.querySelector(s);
+    editingMeal.name = q(".me-name").value.trim();
+    editingMeal.aliases = q(".me-aliases").value.split(",").map((s) => s.trim()).filter(Boolean);
+    editingMeal.servings = Math.max(1, parseInt(q(".me-servings").value, 10) || 1);
+    editingMeal.ingredients = [...panels.querySelectorAll(".me-ing")].map((row) => ({
+      name: row.querySelector(".mi-in-name").value.trim(),
+      calories: +row.querySelector(".mi-in-cal").value || 0,
+      protein: +row.querySelector(".mi-in-p").value || 0,
+      carbs: +row.querySelector(".mi-in-c").value || 0,
+      fat: +row.querySelector(".mi-in-f").value || 0,
+      fiber: 0,
+    }));
+  }
+  // live per-serving preview without re-rendering (so inputs keep focus)
+  function updateMealPreview() {
+    gatherMealEditor();
+    const ps = nutritionMod.recipeTotals(editingMeal).perServing;
+    const el = panels.querySelector(".me-per-val");
+    if (el) el.textContent = `${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}p ${Math.round(ps.carbs)}c ${Math.round(ps.fat)}f`;
+  }
+
   function render() {
     const bar = `<div class="big-tabs">${TABS.map((t, i) =>
       `<button class="big-tab ${i === activeTab ? "active" : ""}" data-tab="${i}">${t.label}</button>`).join("")}</div>`;
-    const body = TABS[activeTab].id === "nutrition" ? nutritionHTML() : workoutHTML();
+    const id = TABS[activeTab].id;
+    const body = id === "nutrition" ? nutritionHTML() : id === "meals" ? mealsHTML() : workoutHTML();
     panels.innerHTML = bar + `<div class="big-tabbody">${body}</div>`;
     wire();
   }
   function wire() {
     panels.querySelectorAll(".big-tab").forEach((b) =>
-      b.addEventListener("click", () => { activeTab = +b.dataset.tab; render(); }));
+      b.addEventListener("click", () => { activeTab = +b.dataset.tab; editingMeal = null; editingId = null; showPicker = false; render(); }));
     // day history nav (shared by both tabs)
     const prev = panels.querySelector(".day-prev"), next = panels.querySelector(".day-next");
     if (prev) prev.addEventListener("click", () => shiftDay(-1));
@@ -2695,6 +2805,31 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     // remove a logged set
     panels.querySelectorAll(".wo-set-x").forEach((b) =>
       b.addEventListener("click", (e) => { e.stopPropagation(); workoutsMod.removeSet(b.dataset.ex, +b.dataset.si, viewDate); render(); }));
+
+    // --- meals: browse, create, edit ---
+    const mn = panels.querySelector(".meal-new");
+    if (mn) mn.addEventListener("click", () => { editingMeal = nutritionMod.newRecipe(); render(); });
+    panels.querySelectorAll(".meal-item").forEach((b) =>
+      b.addEventListener("click", () => { const r = nutritionMod.getRecipe(b.dataset.id); if (r) { editingMeal = JSON.parse(JSON.stringify(r)); render(); } }));
+    // meal editor
+    panels.querySelectorAll(".me-ings input, .me-servings").forEach((inp) =>
+      inp.addEventListener("input", updateMealPreview));
+    const addIng = panels.querySelector(".me-add-ing");
+    if (addIng) addIng.addEventListener("click", () => { gatherMealEditor(); editingMeal.ingredients.push({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }); render(); });
+    panels.querySelectorAll(".mi-in-x").forEach((b) =>
+      b.addEventListener("click", () => { gatherMealEditor(); editingMeal.ingredients.splice(+b.dataset.idx, 1); if (!editingMeal.ingredients.length) editingMeal.ingredients.push({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }); render(); }));
+    const meCancel = panels.querySelector(".me-cancel");
+    if (meCancel) meCancel.addEventListener("click", () => { editingMeal = null; render(); });
+    const meDelete = panels.querySelector(".me-delete");
+    if (meDelete) meDelete.addEventListener("click", () => { if (confirm("Delete this meal?")) { nutritionMod.deleteRecipe(editingMeal.id); editingMeal = null; render(); } });
+    const meSave = panels.querySelector(".me-save");
+    if (meSave) meSave.addEventListener("click", () => {
+      gatherMealEditor();
+      if (!editingMeal.name) { alert("Give the meal a name, sir."); return; }
+      editingMeal.source = "user";
+      nutritionMod.saveRecipe(editingMeal);
+      editingMeal = null; render();
+    });
   }
   render();
 
@@ -2748,7 +2883,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       greeted = true;
       addMessage("Trainer mode, sir. Tell me what you ate and I'll estimate it, log your water, or program your session — let's get you fit.", "apex");
     }
-    viewDate = todayStr(); showPicker = false;   // always open on today
+    viewDate = todayStr(); showPicker = false; editingMeal = null; editingId = null;   // always open clean, on today
     render();   // refresh the dashboard from the latest profile/nutrition data every open
     big.open();
     if (window.APEX.applyBigSplit) window.APEX.applyBigSplit();   // restore saved iPhone split
@@ -2792,7 +2927,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       ] },
       { title: "Memory & Data — kept on THIS device", nodes: [
         { id: "profile", t: "Profile", d: "Facts, goals, the DAIRY allergy, calorie/macro targets, creatine.", f: "profile.js" },
-        { id: "nutrition", t: "Nutrition", d: "Food memory (code words), the daily log, water, recipes — per local day.", f: "nutrition.js" },
+        { id: "nutrition", t: "Nutrition", d: "Food memory (code words), saved meals/recipes logged by name & servings, the daily log, water — per local day.", f: "nutrition.js" },
         { id: "workouts", t: "Workouts", d: "Workout library + per-day check-off and logged sets (weight×reps) with last-time history.", f: "workouts.js" },
         { id: "memory", t: "Memory (people/self)", d: "Catalog + resolver + silent background fact-learning.", f: "memory.js" },
         { id: "settings", t: "Settings & Connections", d: "Your API keys, labelled accounts, mock email/calendar.", f: "settings.js" },

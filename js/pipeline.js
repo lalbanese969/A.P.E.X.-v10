@@ -244,6 +244,10 @@ async function parseNutrition(prompt) {
     "1 pork chop≈4oz, 1 steak≈8oz, 3 slices bacon≈1.5oz). ASSUME LEAN cuts with MINIMAL fat ('turkey'/'steak'/" +
     "'beef'/'ham'/'chicken' = lean; e.g. lean turkey ≈ 38 kcal & 9g protein per oz) UNLESS the user names a fattier " +
     "cut (ribeye, 80/20). Assume COOKED weight unless told raw. Round to whole numbers.\n" +
+    "- SAVED MEALS: if the user references one of their own saved meals ('my normal sandwich', 'my healthy " +
+    "fried rice', '2 servings of my fried rice'), keep the meal's name as they said it (drop a leading 'my'/'normal'), " +
+    "set unit:'serving' and qty = number of servings (default 1) — the app looks up its saved nutrition, so the macros " +
+    "don't matter. Any EXTRA item they add ('with an extra egg') is just another entry in foods.\n" +
     "- water_oz = SIGNED change to water in fl oz: POSITIVE when they drank/add ('drank 32 oz' -> 32, " +
     "'a bottle'≈20, 'a glass'≈8, '1 L'≈34), NEGATIVE to subtract/remove ('subtract 80 oz from water' -> -80, " +
     "'take 20 oz off my water' -> -20). water_set = set the total to an absolute value ('set water to 50' -> 50), else null.\n" +
@@ -289,6 +293,7 @@ function normUnit(u) { const t = (u || "").toLowerCase().trim(); return UNIT_ALI
 const MEASURE_UNITS = new Set(["oz", "ounce", "ounces", "g", "gram", "grams", "kg", "ml", "l", "liter", "litre", "cup", "cups", "tbsp", "tsp", "fl oz"]);
 function fmtQty(qty, unit, name) {
   const u = (unit || "").toLowerCase().trim();
+  if (u === "serving" || u === "servings") return `${qty} serving${qty === 1 ? "" : "s"} ${name}`;
   if (u && MEASURE_UNITS.has(u)) return `${qty} ${u} ${name}`;
   return qty > 1 ? `${qty}× ${name}` : name;
 }
@@ -331,22 +336,27 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
     data.correction = res.food.name;
   }
 
-  // log foods — precedence: your corrected/taught food (same unit) > the AI's own
-  // best per-unit estimate. (The app multiplies per-unit × qty; the AI just guesses
-  // the per-unit values, which it's good at.)
+  // log foods — precedence: a SAVED MEAL (recipe, per-serving) > your corrected/taught
+  // food (same unit) > the AI's own best per-unit estimate. The app multiplies the
+  // chosen per-unit values × qty (qty = servings for a meal).
   const logged = [], dairy = [], unknown = [];
   for (const f of (parsed.foods || [])) {
     if (!f || !f.name) continue;
     const qty = Number(f.qty) || 1;
     const uUnit = normUnit(f.unit);
 
-    let per, name, unit, source, fromMemory = false, isUnknown = false;
+    let per, name, unit, source, fromMemory = false, isUnknown = false, remember = true;
 
+    const recipe = nutrition.findRecipe(f.name);   // one of your saved meals?
     const known = nutrition.findFood(f.name);
     const memUnitOk = !uUnit || !normUnit(known?.per?.unit) || uUnit === normUnit(known?.per?.unit);
     const knownUsable = known && memUnitOk && (known.calories > 0 || known.protein > 0 || known.carbs > 0 || known.fat > 0);
 
-    if (knownUsable) {
+    if (recipe) {
+      const ps = nutrition.recipeTotals(recipe).perServing;
+      per = { calories: ps.calories, protein: ps.protein, carbs: ps.carbs, fat: ps.fat, fiber: ps.fiber, sodium: ps.sodium || 0 };
+      name = recipe.name; unit = "serving"; source = "meal"; fromMemory = true; remember = false;  // the recipe is the source of truth
+    } else if (knownUsable) {
       per = { calories: known.calories, protein: known.protein, carbs: known.carbs, fat: known.fat, fiber: known.fiber, sodium: known.sodium || 0 };
       name = known.name; unit = known.per?.unit || f.unit || null; source = "memory"; fromMemory = true;
     } else {
@@ -357,8 +367,8 @@ function applyNutrition(parsed, { removeMode = "one" } = {}) {
       if (!known || allZero) isUnknown = true;
     }
 
-    nutrition.logFood({ name, qty, unit, ...per,
-      source, confidence: source === "memory" ? 0.95 : 0.4, dairy: !!f.maybe_dairy });
+    nutrition.logFood({ name, qty, unit, ...per, remember,
+      source, confidence: source === "meal" ? 0.95 : source === "memory" ? 0.95 : 0.4, dairy: !!f.maybe_dairy });
     logged.push({ name, qty, unit, calories: Math.round(per.calories * qty), fromMemory });
     if (f.maybe_dairy) dairy.push(name);
     if (isUnknown) unknown.push(name);

@@ -221,5 +221,26 @@ console.log("\n[15] Nutrition day is LOCAL + history listing");
   ok("listDays includes a logged day", nutrition.listDays().includes("2026-07-20"));
 }
 
+console.log("\n[16] Saved meals (recipes): find by name/alias, per-serving, save/delete");
+{
+  ok("seeded recipes present", nutrition.recipes().length >= 2);
+  const fr = nutrition.findRecipe("fried rice");
+  ok("findRecipe matches an alias ('fried rice')", fr && /fried rice/i.test(fr.name));
+  const r = nutrition.newRecipe();
+  r.name = "Test bowl"; r.aliases = ["my bowl"]; r.servings = 2;
+  r.ingredients = [
+    { name: "chicken", calories: 400, protein: 80, carbs: 0, fat: 8, fiber: 0 },
+    { name: "rice", calories: 400, protein: 8, carbs: 88, fat: 2, fiber: 2 },
+  ];
+  nutrition.saveRecipe(r);
+  const found = nutrition.findRecipe("my bowl");
+  ok("saved meal found by code word", found && found.id === r.id);
+  const ps = nutrition.recipeTotals(found).perServing;
+  eq("per-serving calories = total/servings (800/2)", ps.calories, 400);
+  eq("per-serving protein (88/2)", ps.protein, 44);
+  nutrition.deleteRecipe(r.id);
+  ok("deleteRecipe removes it", !nutrition.findRecipe("my bowl"));
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -112,6 +112,25 @@ export function saveRecipe(recipe) {
   setItem(RECIPES_KEY, list);
   return recipe;
 }
+export function deleteRecipe(id) {
+  const list = recipes().filter((r) => r.id !== id);
+  setItem(RECIPES_KEY, list);
+  return list;
+}
+/** Find a saved meal/recipe by name or code word (precise key match, like findFood). */
+export function findRecipe(name) {
+  const k = keyOf(name);
+  if (!k) return null;
+  const list = recipes();
+  return list.find((r) => keyOf(r.name) === k)
+      || list.find((r) => (r.aliases || []).some((a) => keyOf(a) === k))
+      || null;
+}
+/** A blank recipe object for the "new meal" editor. */
+export function newRecipe() {
+  return { id: uid("recipe_"), name: "", aliases: [], servings: 1, source: "user",
+    ingredients: [{ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }] };
+}
 
 /* ---- food memory ---------------------------------------------------------- */
 export function foods() { return getItem(FOODS_KEY, []); }
