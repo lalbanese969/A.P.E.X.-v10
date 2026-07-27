@@ -224,6 +224,10 @@ function removeModeFrom(p) {
     returns a parsed intent, {empty:true} if not nutrition, or null on parse failure. */
 async function parseNutrition(prompt) {
   const allergens = profile.getAllergens();
+  // give the model the user's saved meals so it can match their wording to one
+  const mealList = nutrition.recipes()
+    .map((r) => r.name + (r.aliases && r.aliases.length ? ` (say: ${r.aliases.join(", ")})` : ""))
+    .join(" · ");
   const sys =
     "You process a NUTRITION message for a food tracker and reply ONLY with JSON: " +
     "{\"foods\":[{\"name\":str,\"qty\":num,\"unit\":str,\"calories\":num,\"protein\":num,\"carbs\":num,\"fat\":num,\"fiber\":num,\"maybe_dairy\":bool}]," +
@@ -248,6 +252,7 @@ async function parseNutrition(prompt) {
     "fried rice', '2 servings of my fried rice'), keep the meal's name as they said it (drop a leading 'my'/'normal'), " +
     "set unit:'serving' and qty = number of servings (default 1) — the app looks up its saved nutrition, so the macros " +
     "don't matter. Any EXTRA item they add ('with an extra egg') is just another entry in foods.\n" +
+    (mealList ? "  THE USER'S SAVED MEALS: " + mealList + ". If their wording matches one of these, use that meal's exact name with unit 'serving'.\n" : "") +
     "- water_oz = SIGNED change to water in fl oz: POSITIVE when they drank/add ('drank 32 oz' -> 32, " +
     "'a bottle'≈20, 'a glass'≈8, '1 L'≈34), NEGATIVE to subtract/remove ('subtract 80 oz from water' -> -80, " +
     "'take 20 oz off my water' -> -20). water_set = set the total to an absolute value ('set water to 50' -> 50), else null.\n" +

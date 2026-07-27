@@ -808,6 +808,10 @@ body {
 .fe-name { width: 100%; }
 .fe-line { display: flex; gap: 6px; }
 .fe-line .fe { flex: 1; min-width: 0; width: 100%; }
+/* labelled fields (e.g. "Protein (g)" above the input) in the food editor */
+.fe-fld { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--color-text-dim); margin-bottom: 8px; }
+.fe-fld-wide { width: 100%; }
+.fe-fld .fe { width: 100%; margin: 0; text-transform: none; letter-spacing: normal; font-weight: 400; }
 .fe-actions { align-items: center; gap: 8px; }
 .fe-learn { flex: 1; font-size: 11px; color: var(--color-text-dim); display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .fe-learn input { accent-color: var(--color-orange); }
@@ -876,12 +880,14 @@ body {
 .me-servings { width: 60px; margin: 0 !important; text-align: center; }
 .me-ings-head { font-size: 12px; font-weight: 700; color: var(--color-text); margin-bottom: 7px; }
 .me-ings-note { font-weight: 400; color: var(--color-text-dim); }
-.me-ings { display: flex; flex-direction: column; gap: 6px; }
-.me-ing { display: flex; gap: 5px; align-items: center; }
-.me-ing .mi-in-name { flex: 1 1 auto; min-width: 0; }
-.me-ing input { background: rgba(22, 22, 25, 0.9); border: 1px solid var(--line-soft); color: var(--color-text); border-radius: 6px; padding: 6px 7px; font-family: inherit; font-size: 12px; outline: none; }
+/* ingredient rows as an aligned grid so the labels line up over each column */
+.me-ings { display: grid; grid-template-columns: minmax(0, 1fr) 54px 62px 56px 50px 22px; gap: 6px; align-items: center; }
+.me-ing { display: contents; }
+.me-ing-head span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--color-text-dim); text-align: center; padding-bottom: 2px; }
+.me-ing-head .mi-in-name { text-align: left; }
+.me-ing input { width: 100%; min-width: 0; background: rgba(22, 22, 25, 0.9); border: 1px solid var(--line-soft); color: var(--color-text); border-radius: 6px; padding: 6px 7px; font-family: inherit; font-size: 12px; outline: none; text-align: center; }
+.me-ing .mi-in-name { text-align: left; }
 .me-ing input:focus { border-color: rgba(255, 122, 0, 0.5); }
-.me-ing .mi-in-cal { width: 52px; } .me-ing .mi-in-p, .me-ing .mi-in-c, .me-ing .mi-in-f { width: 40px; }
 .mi-in-x { background: transparent; border: none; color: var(--color-text-dim); font-size: 15px; cursor: pointer; padding: 0 3px; flex-shrink: 0; }
 .mi-in-x:hover { color: #ff6b6b; }
 .me-add-ing { margin-top: 8px; background: transparent; border: 1px dashed var(--line); color: var(--color-text-dim); font-family: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
@@ -2534,16 +2540,16 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   // teach it to the food memory so future logs of this food are accurate.
   function editorRow(f) {
     return `<div class="food-item food-edit-row" data-id="${f.id}">
-      <input class="fe fe-name" value="${escAttr(f.name)}" placeholder="food name">
+      <label class="fe-fld fe-fld-wide">Food name<input class="fe fe-name" value="${escAttr(f.name)}"></label>
       <div class="fe-line">
-        <input class="fe fe-qty" type="number" step="any" value="${f.qty}" title="quantity">
-        <input class="fe fe-unit" value="${escAttr(f.unit || "")}" placeholder="unit (oz, cup, each)">
+        <label class="fe-fld">Quantity<input class="fe fe-qty" type="number" step="any" value="${f.qty}"></label>
+        <label class="fe-fld">Unit<input class="fe fe-unit" value="${escAttr(f.unit || "")}" placeholder="oz, cup, each"></label>
       </div>
       <div class="fe-line">
-        <input class="fe fe-cal" type="number" value="${f.calories}" placeholder="cal">
-        <input class="fe fe-pp"  type="number" value="${f.protein}"  placeholder="P">
-        <input class="fe fe-cc"  type="number" value="${f.carbs}"    placeholder="C">
-        <input class="fe fe-ff"  type="number" value="${f.fat}"      placeholder="F">
+        <label class="fe-fld">Calories<input class="fe fe-cal" type="number" value="${f.calories}"></label>
+        <label class="fe-fld">Protein (g)<input class="fe fe-pp" type="number" value="${f.protein}"></label>
+        <label class="fe-fld">Carbs (g)<input class="fe fe-cc" type="number" value="${f.carbs}"></label>
+        <label class="fe-fld">Fat (g)<input class="fe fe-ff" type="number" value="${f.fat}"></label>
       </div>
       <div class="fe-line fe-actions">
         <label class="fe-learn"><input type="checkbox" class="fe-learn-cb" checked> remember for next time</label>
@@ -2672,7 +2678,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       const ps = nutritionMod.recipeTotals(r).perServing;
       return `<button class="meal-item" data-id="${r.id}">
         <div class="meal-item-top"><span class="mi-name">${r.name}</span><span class="mi-serv">${r.servings} serving${r.servings === 1 ? "" : "s"}</span></div>
-        <div class="mi-macros">${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}p ${Math.round(ps.carbs)}c ${Math.round(ps.fat)}f <span class="mi-per">per serving</span></div>
+        <div class="mi-macros">${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}g protein · ${Math.round(ps.carbs)}g carbs · ${Math.round(ps.fat)}g fat <span class="mi-per">per serving</span></div>
         ${r.aliases && r.aliases.length ? `<div class="mi-aliases">say: ${r.aliases.join(", ")}</div>` : ""}
       </button>`;
     };
@@ -2686,13 +2692,14 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   function mealEditorHTML(r) {
     const isNew = !nutritionMod.recipes().some((x) => x.id === r.id);
     const ingRow = (ing, idx) => `<div class="me-ing" data-idx="${idx}">
-        <input class="mi-in-name" placeholder="ingredient" value="${escAttr(ing.name || "")}">
-        <input class="mi-in-cal" type="number" inputmode="numeric" placeholder="cal" value="${ing.calories || 0}">
-        <input class="mi-in-p" type="number" inputmode="numeric" placeholder="P" value="${ing.protein || 0}">
-        <input class="mi-in-c" type="number" inputmode="numeric" placeholder="C" value="${ing.carbs || 0}">
-        <input class="mi-in-f" type="number" inputmode="numeric" placeholder="F" value="${ing.fat || 0}">
+        <input class="mi-in-name" placeholder="ingredient name" value="${escAttr(ing.name || "")}">
+        <input class="mi-in-cal" type="number" inputmode="numeric" value="${ing.calories || 0}">
+        <input class="mi-in-p" type="number" inputmode="numeric" value="${ing.protein || 0}">
+        <input class="mi-in-c" type="number" inputmode="numeric" value="${ing.carbs || 0}">
+        <input class="mi-in-f" type="number" inputmode="numeric" value="${ing.fat || 0}">
         <button class="mi-in-x" data-idx="${idx}" title="remove">×</button>
       </div>`;
+    const ingHeader = `<div class="me-ing me-ing-head"><span class="mi-in-name">Ingredient</span><span>Cal</span><span>Protein</span><span>Carbs</span><span>Fat</span><span></span></div>`;
     const ps = nutritionMod.recipeTotals(r).perServing;
     return `
       <div class="bcard meal-editor">
@@ -2700,10 +2707,10 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         <input class="me me-name" placeholder="meal name (e.g. Healthy fried rice)" value="${escAttr(r.name)}">
         <input class="me me-aliases" placeholder="code words, comma-separated (e.g. fried rice, my normal sandwich)" value="${escAttr((r.aliases || []).join(", "))}">
         <div class="me-serv-row">makes <input class="me me-servings" type="number" inputmode="numeric" min="1" value="${r.servings || 1}"> serving(s)</div>
-        <div class="me-ings-head">Ingredients <span class="me-ings-note">— cal / P / C / F each</span></div>
-        <div class="me-ings">${(r.ingredients || []).map(ingRow).join("")}</div>
-        <button class="me-add-ing">+ ingredient</button>
-        <div class="me-per">Per serving: <b class="me-per-val">${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}p ${Math.round(ps.carbs)}c ${Math.round(ps.fat)}f</b></div>
+        <div class="me-ings-head">Ingredients <span class="me-ings-note">— grams of protein / carbs / fat, per whole recipe</span></div>
+        <div class="me-ings">${ingHeader}${(r.ingredients || []).map(ingRow).join("")}</div>
+        <button class="me-add-ing">+ add ingredient</button>
+        <div class="me-per">Per serving: <b class="me-per-val">${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}g protein · ${Math.round(ps.carbs)}g carbs · ${Math.round(ps.fat)}g fat</b></div>
         <div class="me-actions">
           ${isNew ? "" : `<button class="me-delete">Delete</button>`}
           <button class="me-cancel">Cancel</button>
@@ -2718,7 +2725,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     editingMeal.name = q(".me-name").value.trim();
     editingMeal.aliases = q(".me-aliases").value.split(",").map((s) => s.trim()).filter(Boolean);
     editingMeal.servings = Math.max(1, parseInt(q(".me-servings").value, 10) || 1);
-    editingMeal.ingredients = [...panels.querySelectorAll(".me-ing")].map((row) => ({
+    editingMeal.ingredients = [...panels.querySelectorAll(".me-ing:not(.me-ing-head)")].map((row) => ({
       name: row.querySelector(".mi-in-name").value.trim(),
       calories: +row.querySelector(".mi-in-cal").value || 0,
       protein: +row.querySelector(".mi-in-p").value || 0,
@@ -2732,7 +2739,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     gatherMealEditor();
     const ps = nutritionMod.recipeTotals(editingMeal).perServing;
     const el = panels.querySelector(".me-per-val");
-    if (el) el.textContent = `${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}p ${Math.round(ps.carbs)}c ${Math.round(ps.fat)}f`;
+    if (el) el.textContent = `${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}g protein · ${Math.round(ps.carbs)}g carbs · ${Math.round(ps.fat)}g fat`;
   }
 
   function render() {
