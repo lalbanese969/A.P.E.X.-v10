@@ -5,7 +5,7 @@
 > [`docs/APEX_ARCHITECTURE.md`](docs/APEX_ARCHITECTURE.md). Update this file as things change —
 > keep it short.
 
-_Last updated: 2026-06-25_
+_Last updated: 2026-07-27_
 
 ## 🔄 Major change: migrated to a client-side (browser-only) app
 APEX no longer has a backend server. Everything (memory, AI Center, action pipeline) now runs as
@@ -60,8 +60,10 @@ more mature pipeline is ever needed again.
   personality/voice overhaul is still planned separately (prompt being drafted by another AI) and
   may extend or replace this.
 - **Slash commands + fullscreen "takeover" modes** — type `/` in the chat box for a command
-  palette. `/open sim` opens the Simulations lab (embedded iframe); `/big` opens **Workout APEX**.
-  Both use one shared `[JS:TAKEOVER]` factory in `index.html`: the honeycomb **grows out of the live
+  palette. `/open sim` opens the Simulations lab (embedded iframe); `/big` opens **Workout APEX**;
+  `/brain` opens a **living flow-chart of how APEX works** (boxes + SVG connectors, driven by a
+  `BRAIN` data object in `[JS:BRAIN]` that is updated whenever a feature is added).
+  All use one shared `[JS:TAKEOVER]` factory in `index.html`: the honeycomb **grows out of the live
   background blobs** (seeded via `window.APEX.honeycombSeeds()`, branching organically), fills, then
   clears from the center until **every** hex is gone (no edge frame), revealing the content; Esc /
   Exit reverses it. Open ≈ 3.45s, close ≈ 1.4s (knobs at the top of the factory). The takeover
@@ -71,16 +73,24 @@ more mature pipeline is ever needed again.
   path (`pipeline.handleCoachPrompt`): fitness/nutrition-focused, **skips the email/calendar action
   machinery**, and is fed a one-line snapshot of today's numbers so it can coach on what you ate /
   your water / your session. Right = **tabbed panels** (switch by click or **←/→ arrows**):
-  **Nutrition** (macros vs. goal that sum from the food log, a **water jug that fills orange** logged
-  in **fl oz**, and the food log), **Workout** (today's exercises, tap to check off, progress), and
-  **Metrics** (sleep/steps/HR/weight — **sample data; Apple Watch sync is a later phase**). Today's
-  nutrition/water/workout are **tracked in `localStorage` (`apex.big.day`) and reset each new day**.
-  Units are **imperial (oz/lb/ft)**. **Responsive & auto-detected**: iPad/desktop = chat left + tabs
-  right; **iPhone = stacked with the panels on top and the chat at the bottom**. Food estimates are
-  still mock (real nutrition/workout logic is the next function pass). (Verified via Playwright:
-  tabs, arrow-nav, water jug + macro totals, check-off, per-day persistence across reload, and the
-  iPhone-stacked order — no console errors.) *Noted for later: a separate installable
-  "today's workout" PWA you add to your phone's home screen for the gym.*
+  - **Nutrition** — macros vs. goal that sum from the food log, a **water jug that fills orange**
+    (fl oz), and the food log. **Real AI nutrition** now, not mock: the coach chat parses "I ate
+    10 oz turkey" / "subtract 80 oz from water" / "set water to 50" into food + water actions
+    (`parseNutrition`→`applyNutrition`). Precedence: **saved recipe > corrected food memory > AI
+    estimate**. Ambiguous meat cuts now **ask** ("lean or fattier?") instead of guessing.
+  - **Meals** — a food diary of **saved recipes** (base ingredients → per-serving macros); log by
+    name ("I had 2 servings of my healthy fried rice", "my breakfast sandwich with an extra egg").
+    The parser is given your saved-meal list so it maps your wording to the right recipe.
+  - **Workout** — pick from a **workout library**, check exercises off, and **log each set
+    (weight × reps)** with "last session" history shown per exercise.
+  - **Supps** — track **supplements + prescription meds** (Rx badge), checked off per day; seeded
+    with creatine; browsable by day.
+  Today's data is **per LOCAL day** in `localStorage` and **resets at local midnight**, and you can
+  **browse past days** with the ‹ Today › nav on each tab. Units are **imperial (oz/lb/ft)**.
+  **Responsive & auto-detected**: iPad/desktop = chat left + tabs right; **iPhone = stacked with the
+  panels on top and the chat at the bottom**. (Verified via Playwright + a 76-assertion Node test
+  suite.) *Noted for later: a separate installable "today's workout" PWA for the gym; Apple Watch /
+  Health import.*
 - **Mobile app feel** — the page is **pinned** (body `position:fixed`, `overscroll-behavior:none`) so
   only the inner areas scroll, never the page (no iPad/iPhone rubber-banding); web-app meta tags make
   **Add to Home Screen** launch it fullscreen like a native app. On **iPhone** the home screen stacks:

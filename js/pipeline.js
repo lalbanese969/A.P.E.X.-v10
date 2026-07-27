@@ -571,7 +571,13 @@ async function draftEmail(prompt, params, packet, priorDraft) {
     "You are A.P.E.X., drafting an email on the user's behalf to send to SOMEONE ELSE. " +
     "This email is addressed to the recipient, not to the user — do not call the recipient " +
     "\"sir\", and do not inject jokes or personality into the email body itself. Write ONLY the " +
-    "email body (no subject line, no commentary), following the writing style below.\n\n" +
+    "email body (no subject line, no commentary), following the writing style below.\n" +
+    // ANTI-FABRICATION — this text is SENT to a real person, so a hallucinated detail is a real
+    // mistake, not just a bad chat reply. Never invent specifics the user didn't give.
+    "CRITICAL: never invent facts the user did not provide — no made-up dates, times, prices, " +
+    "numbers, names, or commitments. If a needed detail is missing, leave a clear bracketed " +
+    "placeholder like [date] or [amount] rather than guessing. Do not promise anything on the " +
+    "user's behalf that they didn't state. Keep it to what the user actually asked to say.\n\n" +
     "Writing style to follow: " + style +
     "\n\n" + contextBlock(packet, { emails: matches });
 
