@@ -242,5 +242,23 @@ console.log("\n[16] Saved meals (recipes): find by name/alias, per-serving, save
   ok("deleteRecipe removes it", !nutrition.findRecipe("my bowl"));
 }
 
+console.log("\n[17] Supplements & meds: list, add, per-day check-off");
+{
+  const supp = await import("../js/supplements.js");
+  ok("seeded with creatine", supp.list().some((s) => /creatine/i.test(s.name)));
+  const s = supp.addSupp({ name: "Vitamin D", dose: "2000 IU", kind: "supplement" });
+  const rx = supp.addSupp({ name: "Lisinopril", dose: "10 mg", kind: "medication" });
+  ok("added a supplement + a medication", supp.list().length >= 3 && rx.kind === "medication");
+  supp.toggle(s.id, "2026-07-27");
+  ok("toggle marks taken for that day", supp.isTaken(s.id, "2026-07-27") === true);
+  ok("not taken on a different day", supp.isTaken(s.id, "2026-07-26") === false);
+  const c = supp.takenCount("2026-07-27");
+  ok("takenCount counts 1 taken of all", c.done === 1 && c.total === supp.list().length);
+  supp.updateSupp(s.id, { dose: "4000 IU" });
+  ok("updateSupp edits", supp.list().find((x) => x.id === s.id).dose === "4000 IU");
+  supp.removeSupp(rx.id);
+  ok("removeSupp deletes", !supp.list().some((x) => x.id === rx.id));
+}
+
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

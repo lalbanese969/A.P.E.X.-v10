@@ -899,6 +899,30 @@ body {
 .me-cancel { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
 .me-delete { background: transparent; border: 1px solid rgba(255,107,107,0.4); color: #ff6b6b; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-right: auto; }
 
+/* ===== Supplements & meds tab ===== */
+.supp-new { background: var(--color-orange); color: #160b00; border: none; font-family: inherit; font-weight: 700; font-size: 12px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.supp-new:hover { filter: brightness(1.1); }
+.supp-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
+.supp-item:first-child { border-top: none; }
+.supp-item.done .wo-check { background: var(--color-orange); border-color: var(--color-orange); color: #160b00; }
+.supp-item.done .supp-name { color: var(--color-text-dim); text-decoration: line-through; }
+.supp-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.supp-name { font-size: 13.5px; color: var(--color-text); font-weight: 600; }
+.supp-med { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; color: #7bb5ff; border: 1px solid rgba(123, 181, 255, 0.4); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+.supp-sub { font-size: 11.5px; color: var(--color-text-dim); }
+.supp-edit { flex-shrink: 0; background: transparent; border: none; color: var(--color-text-dim); font-size: 13px; cursor: pointer; padding: 3px 6px; border-radius: 5px; }
+.supp-edit:hover { color: var(--color-orange); background: rgba(255, 122, 0, 0.12); }
+/* supp editor */
+.se-fld { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--color-text-dim); margin-bottom: 8px; }
+.se { display: block; width: 100%; background: rgba(22, 22, 25, 0.9); border: 1px solid var(--line-soft); color: var(--color-text); border-radius: 7px; padding: 8px 10px; font-family: inherit; font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: normal; outline: none; margin-top: 3px; }
+.se:focus { border-color: rgba(255, 122, 0, 0.5); }
+.se-kind { display: flex; gap: 16px; margin: 4px 0 4px; font-size: 12.5px; color: var(--color-text-dim); }
+.se-kind label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.se-kind input { accent-color: var(--color-orange); }
+.se-save { background: var(--color-orange); color: #160b00; border: none; font-weight: 700; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.se-cancel { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.se-delete { background: transparent; border: 1px solid rgba(255,107,107,0.4); color: #ff6b6b; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-right: auto; }
+
 /* ============================================================================
    [STYLE:BRAIN]  —  the "/brain" flow-map takeover. Same overlay pattern as
    /big and /open sim (transparent overlay, honeycomb canvas on top, content that
@@ -1292,6 +1316,7 @@ import * as settingsMod from "./js/settings.js";
 import * as profileMod from "./js/profile.js";
 import * as nutritionMod from "./js/nutrition.js";
 import * as workoutsMod from "./js/workouts.js";
+import * as supplementsMod from "./js/supplements.js";
 import { APEX_GREETINGS } from "./js/seedData.js";
 
 /* ============================================================================
@@ -2505,10 +2530,11 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
   let showPicker = false;        // workout tab: force the "pick a workout" view
 
   /* ---------- tabs ---------- */
-  const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "meals", label: "Meals" }, { id: "workout", label: "Workout" }];
+  const TABS = [{ id: "nutrition", label: "Nutrition" }, { id: "meals", label: "Meals" }, { id: "workout", label: "Workout" }, { id: "supps", label: "Supps" }];
   let activeTab = 0;
   let editingId = null;      // id of the logged food currently being edited (inline editor)
   let editingMeal = null;    // working copy of the saved-meal (recipe) being edited, or null
+  let editingSupp = null;    // supplement/med being added or edited, or null
   const panels = document.getElementById("big-panels");
 
   function macroRow(m) {
@@ -2742,17 +2768,59 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     if (el) el.textContent = `${Math.round(ps.calories)} kcal · ${Math.round(ps.protein)}g protein · ${Math.round(ps.carbs)}g carbs · ${Math.round(ps.fat)}g fat`;
   }
 
+  /* ---------- SUPPS tab: track supplements + prescription meds, check off daily ---------- */
+  function supplementsHTML() {
+    if (editingSupp) return suppEditorHTML(editingSupp);
+    const items = supplementsMod.list();
+    const day = supplementsMod.getDay(viewDate);
+    const cnt = supplementsMod.takenCount(viewDate);
+    const check = `<span class="wo-check"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>`;
+    const row = (s) => `<div class="supp-item ${day.taken[s.id] ? "done" : ""}" data-id="${s.id}">
+        ${check}
+        <div class="supp-main"><span class="supp-name">${s.name}${s.kind === "medication" ? ' <span class="supp-med">Rx</span>' : ""}</span>${(s.dose || s.notes) ? `<span class="supp-sub">${[s.dose, s.notes].filter(Boolean).join(" · ")}</span>` : ""}</div>
+        <button class="supp-edit" data-id="${s.id}" title="Edit">✎</button>
+      </div>`;
+    return `
+      ${dayNav()}
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">Supplements &amp; Meds</span><button class="supp-new">+ Add</button></div>
+        <div class="bcard-note" style="margin-bottom:10px;">Tap one to check off what you took ${viewDate === todayStr() ? "today" : "that day"}.</div>
+        <div id="supp-list">${items.length ? items.map(row).join("")
+          : `<div class="bcard-note">Nothing yet — tap “+ Add” to track creatine, vitamins, or a prescription.</div>`}</div>
+        ${items.length ? `<div class="wo-progress"><div class="wp-bar"><div class="wp-fill" style="width:${cnt.total ? Math.round(cnt.done / cnt.total * 100) : 0}%"></div></div><span class="wp-txt">${cnt.done}/${cnt.total} taken</span></div>` : ""}
+      </div>`;
+  }
+  function suppEditorHTML(s) {
+    const isNew = !supplementsMod.list().some((x) => x.id === s.id);
+    return `
+      <div class="bcard">
+        <div class="bcard-head"><span class="bcard-title">${isNew ? "Add supplement / med" : "Edit"}</span></div>
+        <label class="se-fld">Name<input class="se se-name" placeholder="e.g. Creatine, Vitamin D, Lisinopril" value="${escAttr(s.name)}"></label>
+        <label class="se-fld">Dose<input class="se se-dose" placeholder="e.g. 5 g, 1 pill, 2000 IU" value="${escAttr(s.dose || "")}"></label>
+        <label class="se-fld">Notes<input class="se se-notes" placeholder="e.g. with breakfast, daily" value="${escAttr(s.notes || "")}"></label>
+        <div class="se-kind">
+          <label><input type="radio" name="suppkind" value="supplement"${s.kind !== "medication" ? " checked" : ""}> Supplement</label>
+          <label><input type="radio" name="suppkind" value="medication"${s.kind === "medication" ? " checked" : ""}> Prescription / med</label>
+        </div>
+        <div class="me-actions">
+          ${isNew ? "" : `<button class="se-delete">Delete</button>`}
+          <button class="se-cancel">Cancel</button>
+          <button class="se-save">Save</button>
+        </div>
+      </div>`;
+  }
+
   function render() {
     const bar = `<div class="big-tabs">${TABS.map((t, i) =>
       `<button class="big-tab ${i === activeTab ? "active" : ""}" data-tab="${i}">${t.label}</button>`).join("")}</div>`;
     const id = TABS[activeTab].id;
-    const body = id === "nutrition" ? nutritionHTML() : id === "meals" ? mealsHTML() : workoutHTML();
+    const body = id === "nutrition" ? nutritionHTML() : id === "meals" ? mealsHTML() : id === "workout" ? workoutHTML() : supplementsHTML();
     panels.innerHTML = bar + `<div class="big-tabbody">${body}</div>`;
     wire();
   }
   function wire() {
     panels.querySelectorAll(".big-tab").forEach((b) =>
-      b.addEventListener("click", () => { activeTab = +b.dataset.tab; editingMeal = null; editingId = null; showPicker = false; render(); }));
+      b.addEventListener("click", () => { activeTab = +b.dataset.tab; editingMeal = null; editingId = null; editingSupp = null; showPicker = false; render(); }));
     // day history nav (shared by both tabs)
     const prev = panels.querySelector(".day-prev"), next = panels.querySelector(".day-next");
     if (prev) prev.addEventListener("click", () => shiftDay(-1));
@@ -2837,6 +2905,28 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       nutritionMod.saveRecipe(editingMeal);
       editingMeal = null; render();
     });
+
+    // --- supplements & meds: check off, add, edit, delete ---
+    panels.querySelectorAll("#supp-list .supp-item").forEach((el) =>
+      el.addEventListener("click", () => { supplementsMod.toggle(el.dataset.id, viewDate); render(); }));
+    panels.querySelectorAll(".supp-edit").forEach((b) =>
+      b.addEventListener("click", (e) => { e.stopPropagation(); const s = supplementsMod.list().find((x) => x.id === b.dataset.id); if (s) { editingSupp = { ...s }; render(); } }));
+    const suppNew = panels.querySelector(".supp-new");
+    if (suppNew) suppNew.addEventListener("click", () => { editingSupp = { id: "supp_new", name: "", dose: "", notes: "", kind: "supplement" }; render(); });
+    const seCancel = panels.querySelector(".se-cancel");
+    if (seCancel) seCancel.addEventListener("click", () => { editingSupp = null; render(); });
+    const seDelete = panels.querySelector(".se-delete");
+    if (seDelete) seDelete.addEventListener("click", () => { if (confirm("Delete this?")) { supplementsMod.removeSupp(editingSupp.id); editingSupp = null; render(); } });
+    const seSave = panels.querySelector(".se-save");
+    if (seSave) seSave.addEventListener("click", () => {
+      const q = (s) => panels.querySelector(s);
+      const patch = { name: q(".se-name").value.trim(), dose: q(".se-dose").value.trim(), notes: q(".se-notes").value.trim(),
+        kind: (panels.querySelector("input[name=suppkind]:checked") || {}).value || "supplement" };
+      if (!patch.name) { alert("Give it a name, sir."); return; }
+      if (supplementsMod.list().some((x) => x.id === editingSupp.id)) supplementsMod.updateSupp(editingSupp.id, patch);
+      else supplementsMod.addSupp(patch);
+      editingSupp = null; render();
+    });
   }
   render();
 
@@ -2890,7 +2980,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
       greeted = true;
       addMessage("Trainer mode, sir. Tell me what you ate and I'll estimate it, log your water, or program your session — let's get you fit.", "apex");
     }
-    viewDate = todayStr(); showPicker = false; editingMeal = null; editingId = null;   // always open clean, on today
+    viewDate = todayStr(); showPicker = false; editingMeal = null; editingId = null; editingSupp = null;   // always open clean, on today
     render();   // refresh the dashboard from the latest profile/nutrition data every open
     big.open();
     if (window.APEX.applyBigSplit) window.APEX.applyBigSplit();   // restore saved iPhone split
@@ -2936,6 +3026,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         { id: "profile", t: "Profile", d: "Facts, goals, the DAIRY allergy, calorie/macro targets, creatine.", f: "profile.js" },
         { id: "nutrition", t: "Nutrition", d: "Food memory (code words), saved meals/recipes logged by name & servings, the daily log, water — per local day.", f: "nutrition.js" },
         { id: "workouts", t: "Workouts", d: "Workout library + per-day check-off and logged sets (weight×reps) with last-time history.", f: "workouts.js" },
+        { id: "supps", t: "Supplements", d: "Your supplements + prescription meds, checked off each day.", f: "supplements.js" },
         { id: "memory", t: "Memory (people/self)", d: "Catalog + resolver + silent background fact-learning.", f: "memory.js" },
         { id: "settings", t: "Settings & Connections", d: "Your API keys, labelled accounts, mock email/calendar.", f: "settings.js" },
       ] },
@@ -2946,13 +3037,13 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
     // the actual flow: which box connects to which
     edges: [
       ["you", "mainchat"], ["you", "big"], ["you", "sim"], ["you", "brain"],
-      ["mainchat", "handle"], ["big", "coach"], ["big", "workouts"],
+      ["mainchat", "handle"], ["big", "coach"], ["big", "workouts"], ["big", "supps"],
       ["handle", "resolver"], ["handle", "ai"],
       ["coach", "nutri"], ["coach", "resolver"], ["coach", "ai"],
       ["nutri", "nutrition"], ["nutri", "profile"],
       ["resolver", "memory"], ["resolver", "profile"],
       ["ai", "settings"],
-      ["profile", "storage"], ["nutrition", "storage"], ["workouts", "storage"], ["memory", "storage"], ["settings", "storage"],
+      ["profile", "storage"], ["nutrition", "storage"], ["workouts", "storage"], ["supps", "storage"], ["memory", "storage"], ["settings", "storage"],
     ],
     legend: "Data flows DOWN the connectors (you → interface → pipeline → thinking → memory → storage); the reply flows back UP to the chat. When a feature is added, this map is updated in [JS:BRAIN]'s BRAIN object (nodes + edges) so it always reflects reality.",
   };
