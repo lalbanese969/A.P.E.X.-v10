@@ -174,9 +174,13 @@ export function exportAll() {
 
 /** All records for a field (history included), newest first. */
 export function history(category, field) {
+  // Sort newest-first by EFFECTIVE date; a record with no effective_date (e.g. the
+  // seeded baseline weight) ranks oldest so a real dated measurement always supersedes
+  // it. `created` is only a tiebreaker between records with the same effective date.
+  const key = (r) => (r.effective_date || "0000-00-00") + "|" + (r.created || "");
   return load()
     .filter((r) => r.category === category && r.field === field)
-    .sort((a, b) => (b.effective_date || b.created).localeCompare(a.effective_date || a.created));
+    .sort((a, b) => key(b).localeCompare(key(a)));
 }
 
 /** The current (latest active) value record for a category+field. */

@@ -814,19 +814,13 @@ body {
 .fe-save { background: var(--color-orange); color: #160b00; border: none; font-weight: 700; padding: 7px 16px; border-radius: 7px; cursor: pointer; font-size: 13px; }
 .fe-cancel { background: transparent; border: 1px solid var(--line-soft); color: var(--color-text-dim); padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 13px; }
 
-/* today's workout */
-.wo-ex { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
-.wo-ex:first-child { border-top: none; }
+/* workout shared bits (check box, exercise name, progress bar) */
 .wo-check { width: 20px; height: 20px; flex-shrink: 0; border-radius: 6px; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; color: transparent; }
-.wo-ex.done .wo-check { background: var(--color-orange); border-color: var(--color-orange); color: #160b00; }
-.wo-ex.done .wo-name { color: var(--color-text-dim); text-decoration: line-through; }
 .wo-name { flex: 1; font-size: 13.5px; color: var(--color-text); }
-.wo-sets { font-size: 12px; color: var(--color-text-dim); }
 .wo-progress { margin-top: 14px; display: flex; align-items: center; gap: 12px; }
 .wo-progress .wp-bar { flex: 1; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
 .wo-progress .wp-fill { height: 100%; background: var(--color-orange); border-radius: 999px; transition: width 0.25s; }
 .wo-progress .wp-txt { font-size: 12px; color: var(--color-text-dim); white-space: nowrap; }
-.wo-streak { margin-top: 12px; font-size: 12px; color: var(--color-orange-soft); }
 
 /* per-exercise card with set logging */
 .wo-ex-card { padding: 12px 0; border-top: 1px solid var(--line-soft); }
@@ -834,7 +828,6 @@ body {
 .wo-ex-top { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .wo-ex-card.done .wo-check { background: var(--color-orange); border-color: var(--color-orange); color: #160b00; }
 .wo-ex-card.done .wo-name { color: var(--color-text-dim); text-decoration: line-through; }
-.wo-name { flex: 1; }
 .wo-sets-target { font-size: 12px; color: var(--color-text-dim); white-space: nowrap; }
 .wo-last { font-size: 11px; color: var(--color-orange-soft); margin: 6px 0 0 32px; }
 .wo-setline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0 32px; }
@@ -909,37 +902,8 @@ body {
 .brain-node .bn-desc { font-size: 11.5px; color: var(--color-text-dim); margin-top: 4px; line-height: 1.4; }
 .brain-node .bn-file { font-size: 10px; color: var(--color-orange-soft); margin-top: 5px; letter-spacing: 0.3px; }
 
-/* the glowing arrow connecting one layer down to the next */
-.brain-arrow { height: 30px; display: flex; align-items: center; justify-content: center; color: var(--color-orange); opacity: 0.75; }
-.brain-arrow svg { width: 18px; height: 18px; filter: drop-shadow(0 0 5px rgba(255, 122, 0, 0.6)); }
-
 .brain-legend { max-width: 760px; margin: 22px auto 0; font-size: 11.5px; color: var(--color-text-dim); text-align: center; line-height: 1.6; border-top: 1px solid var(--line-soft); padding-top: 16px; }
 .brain-legend b { color: var(--color-orange-soft); }
-
-/* water jug — an orange "juice" level you fill toward your daily limit */
-.water-wrap { display: flex; align-items: center; gap: 20px; }
-.jug { position: relative; width: 92px; height: 150px; flex-shrink: 0; border: 2px solid var(--line); border-radius: 10px 10px 16px 16px; overflow: hidden; background: rgba(255, 255, 255, 0.03); }
-.jug-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, #ff7a00, #ffa64d); box-shadow: 0 0 18px rgba(255, 122, 0, 0.5); transition: height 0.4s cubic-bezier(.4,0,.2,1); }
-.jug-goal-line { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(255, 255, 255, 0.35); }
-.jug-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--color-text); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
-.water-right { flex: 1; }
-.water-amt { font-size: 20px; font-weight: 700; color: var(--color-text); }
-.water-amt b { color: var(--color-orange); }
-.water-goal { font-size: 12px; color: var(--color-text-dim); margin-bottom: 12px; }
-.water-btns { display: flex; flex-wrap: wrap; gap: 7px; }
-.water-btns button { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255, 122, 0, 0.10); color: var(--color-orange); font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
-.water-btns button:hover { background: rgba(255, 122, 0, 0.20); }
-.water-btns button.minus { border-color: var(--line-soft); background: rgba(255, 255, 255, 0.04); color: var(--color-text-dim); }
-
-/* metrics (Apple Watch / Health placeholders until sync is built) */
-.metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.metric { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-soft); border-radius: 10px; padding: 14px 16px; }
-.metric .m-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-dim); margin-bottom: 6px; }
-.metric .m-value { font-size: 22px; font-weight: 700; color: var(--color-orange); }
-.metric .m-value small { font-size: 12px; color: var(--color-text-dim); font-weight: 400; margin-left: 3px; }
-.watch-note { background: rgba(255, 122, 0, 0.07); border: 1px solid rgba(255, 122, 0, 0.25); border-radius: 8px; padding: 12px 14px; font-size: 12.5px; color: var(--color-text-dim); }
-.watch-note b { color: var(--color-orange-soft); font-weight: 600; }
-.watch-btn { margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: 1px dashed var(--line); background: transparent; color: var(--color-text-dim); font-family: inherit; font-size: 13px; font-weight: 600; cursor: not-allowed; }
 
 /* nutrition dashboard visuals — calories gauge + water bottle + fiber + memory tag */
 .hero-row { display: flex; gap: 18px; align-items: stretch; }
@@ -969,7 +933,6 @@ body {
   .big-chat { width: auto; max-width: none; border-right: none; border-top: none; order: 3; flex: 1 1 0; min-height: 0; }
   .big-header { padding: 0 96px 0 16px; }
   .big-tabbody { padding: 16px; }
-  .metric-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ============================================================================
