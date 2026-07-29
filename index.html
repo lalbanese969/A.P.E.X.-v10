@@ -505,12 +505,24 @@ body {
 .draft-card .dc-from { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
 .draft-card .dc-from-sel { flex: 1; padding: 7px 9px; border-radius: 8px; border: 1px solid rgba(255,122,0,0.4); background: rgba(15,15,15,0.9); color: var(--color-text); font-size: 13px; }
 .draft-card .dc-add-acct { padding: 6px 10px; font-size: 12px; }
-/* Two-step send confirmation panel */
-.draft-card .dc-confirm { margin-top: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(217,83,79,0.5); background: rgba(217,83,79,0.1); font-size: 13px; }
-.draft-card .dc-cfrow { margin: 4px 0; }
-.draft-card .dc-cfline { margin: 2px 0; color: var(--color-text); }
-.draft-card .dc-final { color: #ff8a85; font-weight: 600; }
-.draft-card .dc-cancel { padding: 3px 10px; font-size: 12px; border-color: var(--color-text-dim); color: var(--color-text-dim); background: transparent; }
+/* Yes/No confirmation popup (used for the two-step send confirm) */
+.apex-modal-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(2px); animation: apexModalFade 0.12s ease-out; }
+@keyframes apexModalFade { from { opacity: 0; } to { opacity: 1; } }
+.apex-modal { width: min(420px, 92vw); background: #141414; border: 1px solid var(--color-orange); border-radius: 14px;
+  padding: 20px; box-shadow: 0 0 26px var(--glow-orange); }
+.apex-modal-title { font-size: 16px; font-weight: 700; color: var(--color-orange); margin-bottom: 12px; }
+.apex-modal-body { font-size: 14px; color: var(--color-text); }
+.apex-modal-line { margin: 5px 0; word-break: break-all; }
+.apex-modal-warn { margin-top: 8px; font-size: 12px; color: var(--color-text-dim); }
+.apex-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.apex-modal-actions button { padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.apex-modal-no { border: 1px solid var(--color-text-dim); background: transparent; color: var(--color-text); }
+.apex-modal-no:hover { background: rgba(255, 255, 255, 0.06); }
+.apex-modal-yes { border: 1px solid #2f8f4e; background: rgba(47, 143, 78, 0.2); color: #6fdc8c; }
+.apex-modal-yes:hover { background: rgba(47, 143, 78, 0.32); }
+.apex-modal-yes.danger { border-color: #d9534f; background: rgba(217, 83, 79, 0.22); color: #ff8a85; }
+.apex-modal-yes.danger:hover { background: rgba(217, 83, 79, 0.34); }
 .acct-chip.gmail-live { border-color: #2f8f4e; background: rgba(47, 143, 78, 0.16); color: #6fdc8c; cursor: default; }
 .gmail-status.ok { font-size: 13px; color: #6fdc8c; margin-bottom: 10px; }
 /* Settings: connected Gmail account rows */
@@ -1695,6 +1707,33 @@ import { APEX_GREETINGS } from "./js/seedData.js";
   }
 
   // Render an editable draft card (from / to / subject / body) inside the chat.
+  // Reusable Yes/No confirmation popup (on-brand modal). Resolves true=Yes, false=No.
+  // `lines` may contain trusted HTML; callers escape any dynamic values themselves.
+  function confirmModal({ title, lines = [], yesText = "Yes", noText = "No", danger = false }) {
+    const em = (s) => (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "apex-modal-overlay";
+      overlay.innerHTML = `
+        <div class="apex-modal" role="dialog" aria-modal="true">
+          <div class="apex-modal-title">${em(title)}</div>
+          <div class="apex-modal-body">${lines.map((l) => `<div class="apex-modal-line">${l}</div>`).join("")}</div>
+          <div class="apex-modal-actions">
+            <button class="apex-modal-no" type="button">${em(noText)}</button>
+            <button class="apex-modal-yes ${danger ? "danger" : ""}" type="button">${em(yesText)}</button>
+          </div>
+        </div>`;
+      const close = (val) => { overlay.remove(); document.removeEventListener("keydown", onKey); resolve(val); };
+      const onKey = (e) => { if (e.key === "Escape") close(false); else if (e.key === "Enter") close(true); };
+      overlay.querySelector(".apex-modal-no").addEventListener("click", () => close(false));
+      overlay.querySelector(".apex-modal-yes").addEventListener("click", () => close(true));
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); }); // click outside = No
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(overlay);
+      overlay.querySelector(".apex-modal-no").focus(); // default focus on the safe choice
+    });
+  }
+
   function renderDraft(draft) {
     // local HTML-escape (this IIFE has no shared esc) so real emails/subjects can't inject markup
     const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1722,7 +1761,6 @@ import { APEX_GREETINGS } from "./js/seedData.js";
         <button class="dc-save">${connected ? "Save to Gmail drafts" : "Save draft"}</button>
         ${connected ? '<button class="dc-send">Send</button>' : ""}
       </div>
-      <div class="dc-confirm" style="display:none;"></div>
       <div class="dc-hint">Tip: just type how you want it changed (e.g. "make it shorter") and I'll refine it. Nothing is ever sent until you confirm twice.</div>`;
     card.querySelector(".dc-to").value = draft.to || "";
     card.querySelector(".dc-subj").value = draft.subject || "";
@@ -1761,42 +1799,41 @@ import { APEX_GREETINGS } from "./js/seedData.js";
       } catch (e) { console.error(e); addMessage("(Couldn't add that account, sir — see the console.)", "apex"); }
     });
 
-    // SEND — deliberately requires TWO explicit confirmations, and never happens on its
-    // own. Stage 0 = idle; stage 1 = first "are you sure" (shows exactly who it's from/to);
-    // stage 2 = final "really send now". A Cancel resets at any point.
+    // SEND — never happens on its own. Clicking Send opens a Yes/No popup ("Are you
+    // sure?") that shows exactly who it's from/to, then a SECOND final Yes/No popup
+    // before it actually sends. Answering No (or Esc / clicking outside) cancels.
     const sendBtn = card.querySelector(".dc-send");
-    const confirmEl = card.querySelector(".dc-confirm");
     if (sendBtn) {
-      let stage = 0;
-      const reset = () => { stage = 0; sendBtn.textContent = "Send"; sendBtn.classList.remove("confirm"); confirmEl.style.display = "none"; confirmEl.innerHTML = ""; };
-      const showConfirm = (html) => { confirmEl.style.display = "block"; confirmEl.innerHTML = html; card.querySelector(".dc-cancel").addEventListener("click", reset); };
       sendBtn.addEventListener("click", async () => {
         const f = fields();
-        if (stage === 0) {
-          if (!f.to.trim()) { addMessage("(No recipient yet, sir — fill in the To field first.)", "apex"); return; }
-          stage = 1; sendBtn.textContent = "Confirm send"; sendBtn.classList.add("confirm");
-          showConfirm(`<div class="dc-cfrow">First check — this would send:</div>
-            <div class="dc-cfline"><b>From:</b> ${esc(active || "your Gmail")}</div>
-            <div class="dc-cfline"><b>To:</b> ${esc(f.to)}</div>
-            <div class="dc-cfline"><b>Subject:</b> ${esc(f.subject) || "<i>(none)</i>"}</div>
-            <div class="dc-cfrow">Right recipient? Click <b>Confirm send</b> to go to the final check, or <button class="dc-cancel" type="button">Cancel</button>.</div>`);
-          return;
-        }
-        if (stage === 1) {
-          stage = 2; sendBtn.textContent = "Yes, send now";
-          showConfirm(`<div class="dc-cfrow dc-final">Final check — I'm about to actually send to <b>${esc(f.to)}</b> from <b>${esc(active || "your Gmail")}</b>. This can't be undone.</div>
-            <div class="dc-cfrow">Click <b>Yes, send now</b> to send, or <button class="dc-cancel" type="button">Cancel</button>.</div>`);
-          return;
-        }
-        // stage 2 -> actually send
+        if (!f.to.trim()) { addMessage("(No recipient yet, sir — fill in the To field first.)", "apex"); return; }
+        // Popup 1 — are you sure? (shows From / To / Subject to double-check)
+        const ok1 = await confirmModal({
+          title: "Are you sure you want to send this?",
+          lines: [
+            `<b>From:</b> ${esc(active || "your Gmail")}`,
+            `<b>To:</b> ${esc(f.to)}`,
+            `<b>Subject:</b> ${esc(f.subject) || "<i>(none)</i>"}`,
+            `<div class="apex-modal-warn">Double-check the recipient above before you continue.</div>`,
+          ],
+          yesText: "Yes", noText: "No",
+        });
+        if (!ok1) { addMessage("(Okay, sir — didn't send.)", "apex"); return; }
+        // Popup 2 — final confirmation
+        const ok2 = await confirmModal({
+          title: "Final check — send now?",
+          lines: [`Really send to <b>${esc(f.to)}</b> now? This can't be undone.`],
+          yesText: "Yes, send now", noText: "No", danger: true,
+        });
+        if (!ok2) { addMessage("(Okay, sir — didn't send.)", "apex"); return; }
         sendBtn.textContent = "Sending…"; sendBtn.disabled = true;
         try {
           await connectionsMod.sendEmail(f);
           addMessage(`(Sent to ${f.to}, sir.)`, "apex");
-          confirmEl.style.display = "none"; sendBtn.textContent = "Sent"; sendBtn.classList.remove("confirm");
+          sendBtn.textContent = "Sent";
         } catch (e) {
           console.error(e); addMessage("(Send failed, sir — see the console.)", "apex");
-          sendBtn.disabled = false; reset();
+          sendBtn.textContent = "Send"; sendBtn.disabled = false;
         }
       });
     }
