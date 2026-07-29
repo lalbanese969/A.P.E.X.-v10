@@ -46,7 +46,7 @@ export async function handlePrompt(userPrompt, { priorDraft = null } = {}) {
       result.apex_response = r.text;
       aiMeta = r;
     } else if (intent === "email_search") {
-      const matches = connections.searchEmail(params.query || prompt);
+      const matches = await connections.searchEmail(params.query || prompt);
       result.email_matches = matches;
       const r = await answer(prompt, packet, { emails: matches });
       result.apex_response = r.text;
@@ -557,7 +557,7 @@ async function answer(prompt, packet, { calendar, emails } = {}) {
 /* ---- drafting + style learning --------------------------------------------- */
 
 async function draftEmail(prompt, params, packet, priorDraft) {
-  const matches = params.query ? connections.searchEmail(params.query) : [];
+  const matches = params.query ? await connections.searchEmail(params.query) : [];
   const ref = matches[0] || null;
 
   const to = pickRecipient(ref, priorDraft);
@@ -587,7 +587,7 @@ async function draftEmail(prompt, params, packet, priorDraft) {
   }
 
   const r = await runTask("user_answer", [{ role: "system", content: system }, { role: "user", content: instruction }]);
-  const draft = connections.createDraft({
+  const draft = await connections.createDraft({
     to, subject, body: cleanDraftBody(r.text),
     accountId: (ref || {}).account_id, inReplyTo: (ref || {}).id,
   });

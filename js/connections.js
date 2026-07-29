@@ -15,6 +15,7 @@
 import { getItem, setItem, ensureSeeded } from "./storage.js";
 import { SEED_EMAIL_MESSAGES, buildSeedCalendarEvents, buildSeedLogs, SEED_TIMERS } from "./seedData.js";
 import { listAccounts } from "./settings.js";
+import * as google from "./google.js";
 
 for (const [acctId, msgs] of Object.entries(SEED_EMAIL_MESSAGES)) {
   ensureSeeded(`connections.emailMessages.${acctId}`, msgs);
@@ -23,15 +24,31 @@ ensureSeeded("connections.calendarEvents", buildSeedCalendarEvents());
 ensureSeeded("logs.backend", buildSeedLogs());
 ensureSeeded("automation.timers", SEED_TIMERS);
 
-/* ---- email ------------------------------------------------------------------ */
+/* ---- email -------------------------------------------------------------------
+   These are Gmail-aware: when the user has connected their real Gmail (js/google.js),
+   they hit the live Gmail API; otherwise they fall back to the local MOCK data so
+   the app still works with zero setup. All four are ASYNC (a real network call when
+   connected), so callers must await them.
 
-export function listRecentEmail(accountId, limit = 10) {
+   Connection state for the UI: */
+export function isEmailConnected() { return google.isConnected(); }
+export function connectedEmailAddress() { return google.connectedEmail(); }
+
+export async function listRecentEmail(accountId, limit = 10) {
+  if (google.isConnected()) {
+    try { return await google.listRecent(limit); }
+    catch (e) { console.warn("Gmail listRecent failed — falling back to mock:", e); }
+  }
   const acctId = accountId || (listAccounts()[0] || {}).id;
   const msgs = getItem(`connections.emailMessages.${acctId}`, []);
   return [...msgs].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, limit);
 }
 
-export function searchEmail(query, accountId, limit = 10) {
+export async function searchEmail(query, accountId, limit = 10) {
+  if (google.isConnected()) {
+    try { return await google.searchMessages(query, limit); }
+    catch (e) { console.warn("Gmail search failed — falling back to mock:", e); }
+  }
   const acctId = accountId || (listAccounts()[0] || {}).id;
   const msgs = getItem(`connections.emailMessages.${acctId}`, []);
   const terms = (query || "").toLowerCase().split(/\s+/).filter(Boolean);
@@ -45,13 +62,26 @@ export function searchEmail(query, accountId, limit = 10) {
   return scored.slice(0, limit).map((x) => x.m);
 }
 
-export function getEmail(accountId, messageId) {
+export async function getEmail(accountId, messageId) {
+  if (google.isConnected()) {
+    try { return await google.getMessageById(messageId); }
+    catch (e) { console.warn("Gmail get failed — falling back to mock:", e); }
+  }
   const msgs = getItem(`connections.emailMessages.${accountId}`, []);
   return msgs.find((m) => m.id === messageId) || null;
 }
 
-/** Save a draft (mock store, logged, NEVER sent). Returns the saved draft with an id. */
-export function createDraft({ to, subject, body, accountId, inReplyTo }) {
+/** Save a draft. Connected → creates a REAL draft in the user's Gmail Drafts (nothing
+    sent). Not connected → local mock store. Returns a draft object with an id/status. */
+export async function createDraft({ to, subject, body, accountId, inReplyTo }) {
+  if (google.isConnected()) {
+    try {
+      const d = await google.createDraft({ to, subject, body });
+      return { id: d.id, to, subject, body, account_id: accountId || null,
+        in_reply_to: inReplyTo || null, created_at: new Date().toISOString(),
+        status: "gmail_draft", gmail_draft_id: d.id };
+    } catch (e) { console.warn("Gmail draft failed — saving a local mock draft instead:", e); }
+  }
   const drafts = getItem("connections.drafts", []);
   const draft = {
     id: `draft_${Date.now()}`,
@@ -64,6 +94,14 @@ export function createDraft({ to, subject, body, accountId, inReplyTo }) {
   drafts.push(draft);
   setItem("connections.drafts", drafts);
   return draft;
+}
+
+/** Actually SEND an email through the connected Gmail. Irreversible — callers must
+    confirm first. Throws if Gmail isn't connected (we never "mock-send"). */
+export async function sendEmail({ to, subject, body }) {
+  if (!google.isConnected()) throw new Error("Connect Gmail first, sir — I won't pretend-send.");
+  const res = await google.sendMessage({ to, subject, body });
+  return { id: (res && res.id) || null, to, subject, body, status: "sent", sent_at: new Date().toISOString() };
 }
 
 export function listDrafts() {

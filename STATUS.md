@@ -33,9 +33,22 @@ more mature pipeline is ever needed again.
 - **AI Center** (`js/aiCenter.js`) — **Groq** is the primary brain (called directly from the
   browser via `fetch()`, no server). **Gemini** is the fallback. No local Ollama (mixed-content
   blocking on HTTPS pages rules it out for the browser version).
-- **Actions (mock data)** (`js/pipeline.js`, `js/connections.js`) — calendar Q&A, email search,
-  email drafting with a style-learning loop. Verified end-to-end: the DocuSign find-and-draft flow
-  and a draft refine that updates the learned writing style both work against live Groq.
+- **Actions** (`js/pipeline.js`, `js/connections.js`) — calendar Q&A, email search, email drafting
+  with a style-learning loop. Verified end-to-end: the DocuSign find-and-draft flow and a draft
+  refine that updates the learned writing style both work against live Groq.
+- **Real Gmail (browser-side OAuth)** (`js/google.js`) — APEX can now connect to **live Gmail** with
+  no backend: Google Identity Services hands the browser a short-lived access token, and APEX calls
+  the Gmail REST API directly (`fetch`). Scopes: `gmail.readonly` + `gmail.compose` (search/read +
+  create drafts + send). When connected, the four email functions in `connections.js`
+  (`searchEmail`/`listRecentEmail`/`getEmail`/`createDraft`) hit real Gmail and the Email view shows
+  the live inbox; **when not connected they fall back to the mock data** so the app still works with
+  zero setup. Draft cards get a **Send** button (double-confirm before it sends; nothing sends
+  automatically). Setup: **Settings → Connect Gmail**, paste a Google OAuth **Client ID** (public,
+  not a secret — stored in localStorage; the access token lives in sessionStorage only). The user
+  must create the Client ID in Google Cloud Console (Web app; authorized origin
+  `https://lalbanese969.github.io` + `http://localhost:8765`; add self as a test user). *Verified:
+  app loads with zero console errors, the Connect Gmail UI renders; live token flow needs the user's
+  Client ID + Google account.*
 - **Settings page** — paste a Groq/Gemini key (saved only in this browser's `localStorage`), add/
   label/remove email accounts. No server, nothing uploaded.
 - **Calendar** — Google-Calendar-style, with a **Week view (Sun→Sat, default) + Month view toggle**
@@ -122,9 +135,9 @@ more mature pipeline is ever needed again.
 ## 🔜 Next up (in rough order, not committed)
 1. **Enable GitHub Pages** — Settings → Pages → deploy from `main`. Get the real public URL, test
    from the iPad/phone with zero PC involvement.
-2. **Real email/calendar OAuth, browser-side** — Gmail + Google Calendar via Google Identity
-   Services, Outlook via MSAL.js — directly from the browser, no backend relay. Proven pattern
-   (the user's prior project already does this).
+2. **Real Gmail is DONE** (browser-side OAuth, see above). Remaining: **Google Calendar** via the
+   same GIS token (add the calendar scope + a `calendar.js` like `google.js`), and **Outlook** via
+   MSAL.js. Also: real send currently needs a manual Client ID paste — fine for one user.
 3. **Tuya lights** — revisit given the client-side architecture (see note above).
 4. Cross-device memory sync (optional, would need something like Supabase), autonomy/triggers,
    tools registry/permissions — later phases, not started.

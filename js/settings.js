@@ -24,6 +24,9 @@ const DEFAULT_SETTINGS = {
   // cheaper/faster Groq model for internal background tasks (e.g. memory extraction)
   groqFastModel: "llama-3.1-8b-instant",
   geminiModel: "gemini-2.0-flash",
+  // Google OAuth Client ID for browser-side Gmail (see js/google.js). NOT a secret —
+  // it's a public identifier, safe to keep in localStorage. Blank until you connect Gmail.
+  googleClientId: "",
 };
 ensureSeeded("settings", DEFAULT_SETTINGS);
 
