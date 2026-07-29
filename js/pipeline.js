@@ -572,6 +572,10 @@ async function draftEmail(prompt, params, packet, priorDraft) {
     "This email is addressed to the recipient, not to the user — do not call the recipient " +
     "\"sir\", and do not inject jokes or personality into the email body itself. Write ONLY the " +
     "email body (no subject line, no commentary), following the writing style below.\n" +
+    // Hard rules from the user:
+    "NEVER use emojis, emoticons, or decorative symbols anywhere in the email — plain professional text only.\n" +
+    "You are ONLY drafting for the user to review. You cannot and must not send anything; the user always " +
+    "sends manually after checking it. Do not add lines implying it was already sent.\n" +
     // ANTI-FABRICATION — this text is SENT to a real person, so a hallucinated detail is a real
     // mistake, not just a bad chat reply. Never invent specifics the user didn't give.
     "CRITICAL: never invent facts the user did not provide — no made-up dates, times, prices, " +

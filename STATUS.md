@@ -42,8 +42,12 @@ more mature pipeline is ever needed again.
   create drafts + send). When connected, the four email functions in `connections.js`
   (`searchEmail`/`listRecentEmail`/`getEmail`/`createDraft`) hit real Gmail and the Email view shows
   the live inbox; **when not connected they fall back to the mock data** so the app still works with
-  zero setup. Draft cards get a **Send** button (double-confirm before it sends; nothing sends
-  automatically). Setup: **Settings → Connect Gmail**, paste a Google OAuth **Client ID** (public,
+  zero setup. **Multiple Gmail accounts** are supported: connect several, pick the **active sender**
+  (in Settings or via the draft card's From dropdown; switching silently re-auths). **Sending safety
+  (per user):** APEX never sends on its own; the draft **Send** button requires **two explicit
+  confirmations**, and the confirm panel shows the exact **From** and **To** so you can double-check
+  the recipient before it goes. Email drafts are **plain text, no emojis** (enforced in the draft
+  prompt). Setup: **Settings → Connect Gmail**, paste a Google OAuth **Client ID** (public,
   not a secret — stored in localStorage; the access token lives in sessionStorage only). The user
   must create the Client ID in Google Cloud Console (Web app; authorized origin
   `https://lalbanese969.github.io` + `http://localhost:8765`; add self as a test user). *Verified:

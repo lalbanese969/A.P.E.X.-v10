@@ -43,12 +43,39 @@ const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 
 let _gisReady = null;    // Promise that resolves once the GIS script is loaded
 let _tokenClient = null; // GIS token client (re-created if the Client ID changes)
-let _token = null;       // { access_token, expires_at, email }
+let _token = null;       // the ACTIVE account's token: { access_token, expires_at, email }
 let _pending = null;     // { resolve, reject } for the in-flight token request
+
+/* ---- MULTI-ACCOUNT MODEL --------------------------------------------------------
+   You can connect more than one Gmail. To keep it simple and SAFE, only ONE account
+   is "active" at a time (holds a live token); the others are just remembered by email
+   so you can switch to them with one click (which silently re-auths, usually with no
+   popup). This avoids juggling several tokens and makes it crystal-clear which account
+   an email would send FROM.
+
+     localStorage "apex.google.accounts"  -> ["a@gmail.com","b@gmail.com"]  (remembered)
+     localStorage "apex.google.active"    -> "a@gmail.com"                  (which is active)
+     sessionStorage "apex.google.token"   -> the active account's token (this session only)
+--------------------------------------------------------------------------------- */
+const ACCTS_KEY = "apex.google.accounts";  // localStorage: remembered account emails
+const ACTIVE_KEY = "apex.google.active";    // localStorage: the active account's email
 
 /* ---- Client ID (public identifier, kept in settings) ------------------------ */
 export function getClientId() { return (getSettings().googleClientId || "").trim(); }
 export function setClientId(id) { updateSettings({ googleClientId: (id || "").trim() }); }
+
+/* ---- remembered account list ------------------------------------------------ */
+function readAccts() { try { return JSON.parse(localStorage.getItem(ACCTS_KEY) || "[]"); } catch (e) { return []; } }
+function writeAccts(l) { try { localStorage.setItem(ACCTS_KEY, JSON.stringify(l)); } catch (e) {} }
+function rememberAccount(email) {
+  if (!email) return;
+  const l = readAccts();
+  if (!l.includes(email)) { l.push(email); writeAccts(l); }
+}
+function setActiveEmail(email) { try { localStorage.setItem(ACTIVE_KEY, email || ""); } catch (e) {} }
+function getActiveEmail() { try { return localStorage.getItem(ACTIVE_KEY) || ""; } catch (e) { return ""; } }
+/** All connected/remembered account emails (for the account picker UI). */
+export function accounts() { return readAccts(); }
 
 /* ---- load the Google sign-in script once ------------------------------------ */
 function loadGis() {
@@ -72,7 +99,11 @@ function readStoredToken() {
   } catch (e) { /* ignore */ }
   return null;
 }
-function storeToken(t) { _token = t; try { sessionStorage.setItem(TOKEN_KEY, JSON.stringify(t)); } catch (e) {} }
+function storeToken(t) {
+  _token = t;
+  try { sessionStorage.setItem(TOKEN_KEY, JSON.stringify(t)); } catch (e) {}
+  if (t && t.email) { setActiveEmail(t.email); rememberAccount(t.email); }
+}
 function clearToken() { _token = null; try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} }
 
 /* ---- connection state (for the UI) ------------------------------------------ */
@@ -82,7 +113,7 @@ export function isConnected() {
 }
 export function connectedEmail() {
   if (!_token) _token = readStoredToken();
-  return (_token && _token.email) || "";
+  return (_token && _token.email) || getActiveEmail() || "";
 }
 
 /* ---- build / reuse the GIS token client ------------------------------------- */
@@ -111,26 +142,52 @@ async function ensureTokenClient() {
   return _tokenClient;
 }
 
-// Ask GIS for a token. prompt:"consent" forces the permission screen (first
-// connect); prompt:"" tries silently (refresh) and only pops up if it must.
-async function requestToken(prompt) {
+// Ask GIS for a token. prompt "consent"/"select_account" force UI (connecting or
+// switching accounts); "" tries silently. `hint` (an email) targets a SPECIFIC
+// account, which matters on machines signed into several Google accounts.
+async function requestToken(prompt, hint) {
   const tc = await ensureTokenClient();
+  const cfg = { prompt: prompt || "" };
+  if (hint) cfg.hint = hint;
   const resp = await new Promise((resolve, reject) => {
     _pending = { resolve, reject };
-    try { tc.requestAccessToken({ prompt }); }
+    try { tc.requestAccessToken(cfg); }
     catch (e) { _pending = null; reject(e); }
   });
   const expires_at = Date.now() + (Number(resp.expires_in || 3600) - 60) * 1000; // 1-min safety margin
-  const email = (_token && _token.email) || await fetchEmailAddress(resp.access_token);
+  // When targeting a specific account (hint), or when we don't yet know who this is,
+  // re-fetch the email so the active account is always labelled correctly.
+  const email = (hint || !(_token && _token.email))
+    ? await fetchEmailAddress(resp.access_token)
+    : _token.email;
   storeToken({ access_token: resp.access_token, expires_at, email });
   return resp.access_token;
 }
 
-/* ---- public: connect / disconnect (call from a user click) ------------------ */
-export async function signIn() {
-  await requestToken("consent"); // explicit consent on the user-initiated connect
+/* ---- public: connect / add / switch / disconnect (call from a user click) --- */
+// First connect (or reconnect the active account).
+export async function signIn(hint) {
+  await requestToken("consent", hint);
   return { email: connectedEmail() };
 }
+// Add ANOTHER account: force Google's account chooser so you pick a different one.
+export async function addAnotherAccount() {
+  await requestToken("select_account consent");
+  return { email: connectedEmail() };
+}
+// Switch which remembered account is active (tries silent first, then a popup).
+export async function setActive(email) {
+  if (!email) return { email: connectedEmail() };
+  try { await requestToken("", email); }
+  catch (e) { await requestToken("consent", email); }
+  return { email: connectedEmail() };
+}
+// Forget one account. If it was active, disconnect the live token too.
+export function forgetAccount(email) {
+  writeAccts(readAccts().filter((e) => e !== email));
+  if (getActiveEmail() === email) { setActiveEmail(readAccts()[0] || ""); clearToken(); }
+}
+// Disconnect the active account (revoke + drop token); keeps it remembered so you can reconnect.
 export function signOut() {
   const t = _token;
   clearToken();
@@ -141,10 +198,12 @@ export function signOut() {
   } catch (e) { /* ignore */ }
 }
 
-// Return a valid access token, refreshing silently if the stored one is stale.
+// Return a valid access token for the ACTIVE account, refreshing silently if stale.
+// The active email is passed as a hint so a multi-account browser can't hand back a
+// token for the wrong account.
 async function token() {
   if (isConnected()) return _token.access_token;
-  return requestToken(""); // silent refresh; pops up only if Google requires it
+  return requestToken("", getActiveEmail());
 }
 
 /* ---- low-level Gmail fetch -------------------------------------------------- */

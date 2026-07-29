@@ -497,12 +497,30 @@ body {
 .draft-card button:hover { background: rgba(255, 122, 0, 0.3); }
 .draft-card .dc-hint { font-size: 11px; color: var(--color-text-dim); margin-top: 8px; }
 .draft-card .dc-live { font-size: 10px; font-weight: 600; color: #6fdc8c; letter-spacing: 0.5px; margin-left: 6px; }
-/* Send button: green so it reads distinct from Save; turns red when armed to confirm */
+/* Send button: green so it reads distinct from Save; turns red once armed to confirm */
 .draft-card .dc-send { border-color: #2f8f4e; background: rgba(47, 143, 78, 0.18); color: #6fdc8c; }
 .draft-card .dc-send:hover { background: rgba(47, 143, 78, 0.3); }
 .draft-card .dc-send.confirm { border-color: #d9534f; background: rgba(217, 83, 79, 0.22); color: #ff8a85; }
+/* From (sending account) row */
+.draft-card .dc-from { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.draft-card .dc-from-sel { flex: 1; padding: 7px 9px; border-radius: 8px; border: 1px solid rgba(255,122,0,0.4); background: rgba(15,15,15,0.9); color: var(--color-text); font-size: 13px; }
+.draft-card .dc-add-acct { padding: 6px 10px; font-size: 12px; }
+/* Two-step send confirmation panel */
+.draft-card .dc-confirm { margin-top: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(217,83,79,0.5); background: rgba(217,83,79,0.1); font-size: 13px; }
+.draft-card .dc-cfrow { margin: 4px 0; }
+.draft-card .dc-cfline { margin: 2px 0; color: var(--color-text); }
+.draft-card .dc-final { color: #ff8a85; font-weight: 600; }
+.draft-card .dc-cancel { padding: 3px 10px; font-size: 12px; border-color: var(--color-text-dim); color: var(--color-text-dim); background: transparent; }
 .acct-chip.gmail-live { border-color: #2f8f4e; background: rgba(47, 143, 78, 0.16); color: #6fdc8c; cursor: default; }
 .gmail-status.ok { font-size: 13px; color: #6fdc8c; margin-bottom: 10px; }
+/* Settings: connected Gmail account rows */
+.gmail-acct { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,122,0,0.25); margin-bottom: 6px; }
+.gmail-acct.active { border-color: #2f8f4e; background: rgba(47,143,78,0.1); }
+.gmail-acct .ga-name { flex: 1; font-size: 13px; color: var(--color-text); word-break: break-all; }
+.gmail-acct .ga-badge { font-size: 11px; font-weight: 600; color: #6fdc8c; }
+.gmail-acct .ga-switch, .gmail-acct .ga-forget { padding: 4px 10px; font-size: 12px; border-radius: 6px; cursor: pointer; border: 1px solid rgba(255,122,0,0.4); background: rgba(255,122,0,0.12); color: var(--color-orange-soft); }
+.gmail-acct .ga-forget { border-color: #5a2a2a; background: #2a1414; color: #d99; }
+.gmail-actions { display: flex; gap: 8px; margin-top: 8px; }
 
 /* nav active state */
 .nav-item.active { background: rgba(255, 122, 0, 0.14); border-color: rgba(255, 122, 0, 0.6); color: var(--color-orange); }
@@ -1676,22 +1694,36 @@ import { APEX_GREETINGS } from "./js/seedData.js";
     return div;
   }
 
-  // Render an editable draft card (to / subject / body) inside the chat.
+  // Render an editable draft card (from / to / subject / body) inside the chat.
   function renderDraft(draft) {
+    // local HTML-escape (this IIFE has no shared esc) so real emails/subjects can't inject markup
+    const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     lastDraft = draft;
     const card = document.createElement("div");
     card.className = "draft-card";
     const connected = connectionsMod.isEmailConnected();
+    const accts = connected ? googleMod.accounts() : [];
+    const active = connected ? googleMod.connectedEmail() : "";
+    // "From" row (which connected account this would send from) + add-account button.
+    const fromRow = connected ? `
+      <label>From (sending account)</label>
+      <div class="dc-from">
+        <select class="dc-from-sel">${accts.map((a) =>
+          `<option value="${esc(a)}" ${a === active ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
+        <button class="dc-add-acct" type="button">+ Add another Gmail</button>
+      </div>` : "";
     card.innerHTML = `
       <div class="dc-head">DRAFT EMAIL${connected ? ' <span class="dc-live">Gmail connected</span>' : ""}</div>
-      <label>To</label><input class="dc-to" value="">
+      ${fromRow}
+      <label>To (double-check the recipient)</label><input class="dc-to" value="">
       <label>Subject</label><input class="dc-subj" value="">
       <label>Body</label><textarea class="dc-body"></textarea>
       <div class="dc-actions">
         <button class="dc-save">${connected ? "Save to Gmail drafts" : "Save draft"}</button>
-        ${connected ? '<button class="dc-send">Send ▸</button>' : ""}
+        ${connected ? '<button class="dc-send">Send</button>' : ""}
       </div>
-      <div class="dc-hint">Tip: just type how you want it changed (e.g. "make it shorter") and I'll refine it.</div>`;
+      <div class="dc-confirm" style="display:none;"></div>
+      <div class="dc-hint">Tip: just type how you want it changed (e.g. "make it shorter") and I'll refine it. Nothing is ever sent until you confirm twice.</div>`;
     card.querySelector(".dc-to").value = draft.to || "";
     card.querySelector(".dc-subj").value = draft.subject || "";
     card.querySelector(".dc-body").value = draft.body || "";
@@ -1711,26 +1743,60 @@ import { APEX_GREETINGS } from "./js/seedData.js";
       } catch (e) { console.error(e); addMessage("(Couldn't save that draft, sir — see the console.)", "apex"); }
       finally { saveBtn.disabled = false; }
     });
-    // Send only exists when Gmail is connected, and always double-confirms first.
+
+    // "From" account switch — changing it switches the active sending account (may
+    // pop a quick Google window to re-authorize that account).
+    const fromSel = card.querySelector(".dc-from-sel");
+    if (fromSel) fromSel.addEventListener("change", async () => {
+      const target = fromSel.value;
+      try { await googleMod.setActive(target); addMessage(`(Sending account is now ${target}, sir.)`, "apex"); }
+      catch (e) { console.error(e); addMessage("(Couldn't switch account, sir — see the console.)", "apex"); fromSel.value = active; }
+    });
+    const addAcctBtn = card.querySelector(".dc-add-acct");
+    if (addAcctBtn) addAcctBtn.addEventListener("click", async () => {
+      try {
+        const { email } = await googleMod.addAnotherAccount();
+        addMessage(`(Added ${email}, sir — it's now the active sending account.)`, "apex");
+        renderDraft(draft); card.remove(); // re-render with the new account in the list
+      } catch (e) { console.error(e); addMessage("(Couldn't add that account, sir — see the console.)", "apex"); }
+    });
+
+    // SEND — deliberately requires TWO explicit confirmations, and never happens on its
+    // own. Stage 0 = idle; stage 1 = first "are you sure" (shows exactly who it's from/to);
+    // stage 2 = final "really send now". A Cancel resets at any point.
     const sendBtn = card.querySelector(".dc-send");
+    const confirmEl = card.querySelector(".dc-confirm");
     if (sendBtn) {
-      let armed = false;
+      let stage = 0;
+      const reset = () => { stage = 0; sendBtn.textContent = "Send"; sendBtn.classList.remove("confirm"); confirmEl.style.display = "none"; confirmEl.innerHTML = ""; };
+      const showConfirm = (html) => { confirmEl.style.display = "block"; confirmEl.innerHTML = html; card.querySelector(".dc-cancel").addEventListener("click", reset); };
       sendBtn.addEventListener("click", async () => {
         const f = fields();
-        if (!armed) {
+        if (stage === 0) {
           if (!f.to.trim()) { addMessage("(No recipient yet, sir — fill in the To field first.)", "apex"); return; }
-          armed = true; sendBtn.textContent = "Really send?"; sendBtn.classList.add("confirm");
-          setTimeout(() => { armed = false; sendBtn.textContent = "Send ▸"; sendBtn.classList.remove("confirm"); }, 4000);
+          stage = 1; sendBtn.textContent = "Confirm send"; sendBtn.classList.add("confirm");
+          showConfirm(`<div class="dc-cfrow">First check — this would send:</div>
+            <div class="dc-cfline"><b>From:</b> ${esc(active || "your Gmail")}</div>
+            <div class="dc-cfline"><b>To:</b> ${esc(f.to)}</div>
+            <div class="dc-cfline"><b>Subject:</b> ${esc(f.subject) || "<i>(none)</i>"}</div>
+            <div class="dc-cfrow">Right recipient? Click <b>Confirm send</b> to go to the final check, or <button class="dc-cancel" type="button">Cancel</button>.</div>`);
           return;
         }
-        armed = false; sendBtn.textContent = "Sending…"; sendBtn.disabled = true; sendBtn.classList.remove("confirm");
+        if (stage === 1) {
+          stage = 2; sendBtn.textContent = "Yes, send now";
+          showConfirm(`<div class="dc-cfrow dc-final">Final check — I'm about to actually send to <b>${esc(f.to)}</b> from <b>${esc(active || "your Gmail")}</b>. This can't be undone.</div>
+            <div class="dc-cfrow">Click <b>Yes, send now</b> to send, or <button class="dc-cancel" type="button">Cancel</button>.</div>`);
+          return;
+        }
+        // stage 2 -> actually send
+        sendBtn.textContent = "Sending…"; sendBtn.disabled = true;
         try {
           await connectionsMod.sendEmail(f);
-          addMessage(`(Sent to ${f.to}, sir. ✔)`, "apex");
-          sendBtn.textContent = "Sent ✔";
+          addMessage(`(Sent to ${f.to}, sir.)`, "apex");
+          confirmEl.style.display = "none"; sendBtn.textContent = "Sent"; sendBtn.classList.remove("confirm");
         } catch (e) {
           console.error(e); addMessage("(Send failed, sir — see the console.)", "apex");
-          sendBtn.textContent = "Send ▸"; sendBtn.disabled = false;
+          sendBtn.disabled = false; reset();
         }
       });
     }
@@ -1772,6 +1838,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 
   window.APEX = window.APEX || {};
   window.APEX.resetChat = resetChat;
+  window.APEX._renderDraft = renderDraft; // debug/test hook — render a draft card directly
 })();
 
 
@@ -2165,7 +2232,7 @@ import { APEX_GREETINGS } from "./js/seedData.js";
       if (!activeAccount && accts.length) activeAccount = accts[0].id;
       // When real Gmail is connected, show one live chip; otherwise the mock accounts.
       acctEl.innerHTML = connected
-        ? `<span class="acct-chip active gmail-live">📬 ${connectionsMod.connectedEmailAddress() || "Gmail"} · live</span>`
+        ? `<span class="acct-chip active gmail-live">${esc(connectionsMod.connectedEmailAddress() || "Gmail")} · live</span>`
         : accts.map((a) =>
             `<span class="acct-chip ${a.id === activeAccount ? "active" : ""}" data-id="${a.id}">${a.label}</span>`).join("");
       if (!connected) acctEl.querySelectorAll(".acct-chip").forEach((c) =>
@@ -2269,16 +2336,38 @@ import { APEX_GREETINGS } from "./js/seedData.js";
 
       <div class="set-section">
         <h3>Connect Gmail (real email)</h3>
-        ${googleMod.isConnected()
-          ? `<div class="gmail-status ok">✔ Connected as <b>${esc(googleMod.connectedEmail() || "your Google account")}</b> — search, drafts and send are live.</div>
-             <button class="set-save" id="gmail-disconnect" style="background:#3a1a1a;border-color:#5a2a2a;">Disconnect Gmail</button>`
-          : `<div class="set-note" style="margin-bottom:8px;">Paste your Google OAuth <b>Client ID</b>, then click Connect. Nothing is stored on a server — the Client ID is public, and the access token stays in this browser session only. (Ask me for the 5-minute Google setup steps if you don't have a Client ID yet.)</div>
+        ${(() => {
+          const connected = googleMod.isConnected();
+          const active = googleMod.connectedEmail();
+          const accts = googleMod.accounts();
+          if (connected || accts.length) {
+            // one row per remembered account; the active one is marked and can't be "switched to" again
+            const rows = accts.map((a) => `
+              <div class="gmail-acct ${a === active ? "active" : ""}">
+                <span class="ga-name">${esc(a)}</span>
+                ${a === active
+                  ? `<span class="ga-badge">${connected ? "active · connected" : "active"}</span>`
+                  : `<button class="ga-switch" data-email="${esc(a)}" type="button">Use this one</button>`}
+                <button class="ga-forget" data-email="${esc(a)}" type="button" title="Remove">Remove</button>
+              </div>`).join("");
+            return `<div class="set-note" style="margin-bottom:8px;">${connected
+                ? "Search, drafts and send are live for the <b>active</b> account. Nothing sends without your confirmation."
+                : "Reconnect the account you want to use."}</div>
+              ${rows}
+              <div class="gmail-actions">
+                <button class="set-save" id="gmail-add">+ Add another Gmail</button>
+                <button class="set-save" id="gmail-disconnect" style="background:#3a1a1a;border-color:#5a2a2a;">Disconnect active</button>
+              </div>
+              <span id="gmail-msg" class="set-note"></span>`;
+          }
+          return `<div class="set-note" style="margin-bottom:8px;">Paste your Google OAuth <b>Client ID</b>, then click Connect. Nothing is stored on a server — the Client ID is public, and the access token stays in this browser session only. (Ask me for the 5-minute Google setup steps if you don't have a Client ID yet.)</div>
              <div class="set-row">
                <label>Google OAuth Client ID</label>
                <input id="set-google-clientid" placeholder="${s.googleClientId ? esc(s.googleClientId) : "xxxxxxxx.apps.googleusercontent.com"}" value="${esc(s.googleClientId || "")}">
              </div>
              <button class="set-save" id="gmail-connect">Connect Gmail</button>
-             <span id="gmail-msg" class="set-note"></span>`}
+             <span id="gmail-msg" class="set-note"></span>`;
+        })()}
       </div>
 
       <div class="set-section">
@@ -2342,13 +2431,30 @@ import { APEX_GREETINGS } from "./js/seedData.js";
         connectBtn.disabled = false;
       }
     });
-    const disconnectBtn = document.getElementById("gmail-disconnect");
-    if (disconnectBtn) disconnectBtn.addEventListener("click", () => {
-      googleMod.signOut();
+    const refreshAfterGmail = () => {
       render();
       if (window.APEX.loadEmail) window.APEX.loadEmail();
       if (window.APEX.refreshStatus) window.APEX.refreshStatus();
+    };
+    const disconnectBtn = document.getElementById("gmail-disconnect");
+    if (disconnectBtn) disconnectBtn.addEventListener("click", () => { googleMod.signOut(); refreshAfterGmail(); });
+
+    const addBtn = document.getElementById("gmail-add");
+    if (addBtn) addBtn.addEventListener("click", async () => {
+      const msg = document.getElementById("gmail-msg");
+      addBtn.disabled = true; if (msg) msg.textContent = " Opening Google account picker…";
+      try { const { email } = await googleMod.addAnotherAccount(); if (msg) msg.textContent = ` Added ${email}.`; refreshAfterGmail(); }
+      catch (e) { console.error(e); if (msg) msg.textContent = " Couldn't add account: " + (e.message || e); addBtn.disabled = false; }
     });
+    body.querySelectorAll(".ga-switch").forEach((b) => b.addEventListener("click", async () => {
+      const msg = document.getElementById("gmail-msg");
+      b.disabled = true; if (msg) msg.textContent = ` Switching to ${b.dataset.email}…`;
+      try { await googleMod.setActive(b.dataset.email); refreshAfterGmail(); }
+      catch (e) { console.error(e); if (msg) msg.textContent = " Couldn't switch: " + (e.message || e); b.disabled = false; }
+    }));
+    body.querySelectorAll(".ga-forget").forEach((b) => b.addEventListener("click", () => {
+      googleMod.forgetAccount(b.dataset.email); refreshAfterGmail();
+    }));
   }
 
   function flash(msg) {
@@ -3116,7 +3222,7 @@ function makeTakeover({ overlay, canvas, closeBtn, content, onFirstOpen }) {
         { id: "nutrition", t: "Nutrition", d: "Food memory (code words), saved meals/recipes logged by name & servings, the daily log, water — per local day.", f: "nutrition.js" },
         { id: "workouts", t: "Workouts", d: "Workout library + per-day check-off and logged sets (weight×reps) with last-time history.", f: "workouts.js" },
         { id: "supps", t: "Supplements", d: "Your supplements + prescription meds, checked off each day.", f: "supplements.js" },
-        { id: "gmail", t: "Gmail (live)", d: "Real email via browser OAuth — search, read, draft, send. Falls back to mock data when not connected.", f: "google.js" },
+        { id: "gmail", t: "Gmail (live)", d: "Real email via browser OAuth — search, read, draft, send. Multiple accounts (pick the active sender); sending needs two confirmations. Falls back to mock data when not connected.", f: "google.js" },
         { id: "memory", t: "Memory (people/self)", d: "Catalog + resolver + silent background fact-learning.", f: "memory.js" },
         { id: "settings", t: "Settings & Connections", d: "Your API keys, Google Client ID, labelled accounts, mock email/calendar.", f: "settings.js" },
       ] },
