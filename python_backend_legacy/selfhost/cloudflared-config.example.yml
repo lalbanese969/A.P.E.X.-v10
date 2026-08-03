@@ -1,0 +1,25 @@
+# Cloudflare Tunnel config — TEMPLATE. Copy to the cloudflared config location and fill in.
+#
+# Location:
+#   Linux/mac:  ~/.cloudflared/config.yml   (or /etc/cloudflared/config.yml for the service)
+#   Windows:    C:\Users\<you>\.cloudflared\config.yml
+#
+# Prereqs (see SELF_HOSTING_GUIDE.md Step 5):
+#   cloudflared tunnel login
+#   cloudflared tunnel create apex        # prints the TUNNEL-ID and writes a credentials .json
+#   cloudflared tunnel route dns apex apex.yourname.com
+# Then run:  cloudflared tunnel run apex   (or install it as a service)
+
+# The tunnel's UUID from `cloudflared tunnel create apex`
+tunnel: PASTE-YOUR-TUNNEL-ID-HERE
+
+# Path to the credentials file that `create` wrote (adjust the home dir + id)
+credentials-file: /home/YOUR_USERNAME/.cloudflared/PASTE-YOUR-TUNNEL-ID-HERE.json
+
+# Route incoming hostnames to local services on this machine.
+ingress:
+  # Your APEX hostname -> the local APEX server (Track A static OR Track B backend, both on 8765)
+  - hostname: apex.yourname.com
+    service: http://localhost:8765
+  # Required catch-all: anything else gets a 404
+  - service: http_status:404

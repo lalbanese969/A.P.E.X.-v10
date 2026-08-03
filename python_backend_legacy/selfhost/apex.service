@@ -1,0 +1,31 @@
+# systemd unit — run the A.P.E.X. backend 24/7 on Linux, auto-start on boot, auto-restart on crash.
+#
+# SETUP:
+#   1. Edit the paths + User below to match your machine.
+#   2. sudo cp apex.service /etc/systemd/system/apex.service
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now apex
+#   5. Check it:  systemctl status apex     Logs:  journalctl -u apex -f
+#
+# This runs the Python BACKEND (Track B). For the static-only app (Track A), change ExecStart to:
+#   ExecStart=/usr/bin/python3 -m http.server 8765 --bind 0.0.0.0
+#   WorkingDirectory=/home/YOU/apex          (the repo root, where index.html is)
+
+[Unit]
+Description=A.P.E.X. backend (self-hosted)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# --- EDIT THESE ---
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/apex/python_backend_legacy
+EnvironmentFile=-/home/YOUR_USERNAME/apex/python_backend_legacy/selfhost/.env
+ExecStart=/usr/bin/python3 -m backend.server
+# ------------------
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

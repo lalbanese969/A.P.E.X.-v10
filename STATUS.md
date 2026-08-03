@@ -136,6 +136,16 @@ more mature pipeline is ever needed again.
   run it. Likely candidate for a future small serverless function, or stays in the archived Python
   backend's domain.)
 
+## 🏠 Self-hosting prep (new — old desktop as an always-on home server)
+The user is turning a hand-me-down desktop into a free 24/7 home server (waiting on a hard drive —
+the only blocker). A complete **self-hosting kit** is written at
+[`python_backend_legacy/selfhost/`](python_backend_legacy/selfhost/) and **does not touch the live
+app**: a full guide (Track A = serve the static app + Cloudflare Tunnel, works today; Track B =
+Python backend + local Ollama for private AI), hardware/Ollama notes, a checklist, `.env.example`,
+`run-static`/`run-backend` scripts (bash + PowerShell), a `systemd` unit, and a cloudflared config
+template. **Known gap:** the GitHub-Pages UI can't yet call the home backend — a "backend URL"
+setting in the client is the next build that makes Track B pay off (roadmap in the kit's guide).
+
 ## 🔜 Next up (in rough order, not committed)
 1. **Enable GitHub Pages** — Settings → Pages → deploy from `main`. Get the real public URL, test
    from the iPad/phone with zero PC involvement.

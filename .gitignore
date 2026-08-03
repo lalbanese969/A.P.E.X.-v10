@@ -9,6 +9,11 @@ secrets/*
 !secrets/.gitkeep
 !secrets/secrets.example.json
 
+# --- Self-hosting: real .env holds keys + the access password (NEVER commit) ---
+# The *.example templates ARE committed; any actual ".env" (at any depth) is not.
+.env
+**/.env
+
 # --- Python ---
 __pycache__/
 *.py[cod]
